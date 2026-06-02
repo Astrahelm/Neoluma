@@ -1,5 +1,6 @@
 #pragma once
 #include <map>
+#include <filesystem>
 
 #include "Frontend/Lexer/Lexer.hpp"
 #include "Frontend/Parser/Parser.hpp"
@@ -38,10 +39,15 @@ struct CompilerSettings {
     };
 };
 
+struct DependencyInput {
+    std::filesystem::path rootPath;
+    std::filesystem::path sourceFolder = "src";
+};
+
 struct CompilationInput {
     OutputType targetOutput;
     std::vector<std::filesystem::path> files;
-    std::map<std::string, std::filesystem::path> dependencies;
+    std::map<std::string, DependencyInput> dependencies;
     CompilerSettings settings;
 };
 

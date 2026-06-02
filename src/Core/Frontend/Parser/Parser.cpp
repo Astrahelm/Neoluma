@@ -9,8 +9,6 @@
 #include "../Nodes.hpp"
 #include "Parser.hpp"
 
-#include <windows.h>
-
 #include "../Token.hpp"
 #include "../../../HelperFunctions.hpp"
 #include "ASTBuilder.hpp"

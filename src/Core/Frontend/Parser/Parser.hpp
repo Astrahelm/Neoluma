@@ -11,13 +11,14 @@ int getOperatorPrecedence(const std::string& op);
 bool isAssignmentOperator(const std::string& op);
 
 //Parser
-struct Parser {
+class Parser {
+public:
     void parseModule(const std::vector<Token>& tok, const std::string& moduleName); // main parsing
     void printModule(int indentation = 0);
 
     // ErrorManager is used to report errors
     ErrorManager* errorManager = nullptr;
-
+private:
     MemoryPtr<ModuleNode> moduleSource = nullptr;
     std::vector<Token> tokens;
     size_t pos = 0;
@@ -120,7 +121,7 @@ struct Parser {
     MemoryPtr<WhileLoopNode> parseWhile();
 
     // Declarations
-    MemoryPtr<FunctionNode> parseFunction(std::vector<MemoryPtr<CallExpressionNode>> decorators, std::vector<MemoryPtr<ModifierNode>> modifiers);
+    MemoryPtr<FunctionNode> parseFunction(std::vector<MemoryPtr<CallExpressionNode>> decorators, std::vector<MemoryPtr<ModifierNode>> modifiers, bool isIntrinsic);
     MemoryPtr<ClassNode> parseClass(std::vector<MemoryPtr<CallExpressionNode>> decorators, std::vector<MemoryPtr<ModifierNode>> modifiers);
     MemoryPtr<NamespaceNode> parseNamespace();
     MemoryPtr<BlockNode> parseBlock();

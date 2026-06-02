@@ -19,15 +19,15 @@ void Compiler::check(bool jsonOutput) {
     // Parsing dependencies before getting started
     std::vector<std::filesystem::path> files = program.input.files;
 
-    for (const auto& [name, path] : program.input.dependencies) {
-        std::filesystem::path sourcePath = path / "src";
+    for (const auto& [name, dependency] : program.input.dependencies) {
+        std::filesystem::path sourcePath = dependency.rootPath / dependency.sourceFolder;
         for (const auto& file : std::filesystem::recursive_directory_iterator( sourcePath, std::filesystem::directory_options::skip_permission_denied)) {
             if (file.is_regular_file() && file.path().extension() == ".nm") files.push_back(file.path());
         }
     }
 
     // Parsing the project itself
-    for (const auto& file : program.input.files){
+    for (const auto& file : files){
         // Lexer: breaks code down into tokens.
         std::string source = readFile(file.string());
         std::vector<Token> tokens = lexer.tokenize(file.string());
