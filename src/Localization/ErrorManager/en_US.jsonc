@@ -191,7 +191,10 @@
 			"constructorFailed.hint": "Make sure the constructor matches the class name and has a valid body.",
 
 			"enumNonLiteralValue.message": "Enum member '{}' must have a literal value",
-			"enumNonLiteralValue.hint": "Use a number or string literal. For example: enum Color {{ Red = 0, Green = 1 }}."
+			"enumNonLiteralValue.hint": "Use a number or string literal. For example: enum Color {{ Red = 0, Green = 1 }}.",
+
+			"intrinsicBody.message": "{} cannot have a function body while being an intrinsic function",
+			"intrinsicBody.hint": "Intrinsic calls are reserved for LLVM layer. Remove the curly braces."
 		},
 
 		"InvalidNumberFormat.message": "Invalid number format: '{}'",

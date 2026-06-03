@@ -16,7 +16,7 @@ enum struct ASTNodeType {
     BreakStatement, ContinueStatement, ThrowStatement,
     Array, Set, Dict, Tuple, Void, Result, Enum, Interface, Lambda,
     EnumMember, InterfaceField,
-    RawType,
+    RawType, GenericParameter,
 };
 
 enum struct ASTModifierType {
@@ -36,6 +36,13 @@ enum struct ASTImportType {
     ForeignRelative - imported from other language via langpacks, but with relative path.
     */
     Native, Relative, Foreign, ForeignRelative,
+};
+
+struct GenericParameter {
+    std::string name;
+    int line = 0;
+    int column = 0;
+    std::string filePath = "";
 };
 
 struct ASTNode {
@@ -114,13 +121,19 @@ struct BinaryOperationNode : ASTNode {
     std::string toString(int indent) const override;
 };
 
+
+
 struct RawTypeNode : ASTNode {
     MemoryPtr<VariableNode> varType;
     // ASTNode is used only for nullptr. Be aware!
     MemoryPtr<ASTNode> varSize;
 
-    RawTypeNode(MemoryPtr<VariableNode> varType, MemoryPtr<ASTNode> varSize = nullptr)
-    : varType(std::move(varType)), varSize(std::move(varSize)) {
+    // array<str>, dict<str, int>, Box<T>
+    std::vector<MemoryPtr<RawTypeNode>> genericArguments;
+
+    RawTypeNode(MemoryPtr<VariableNode> varType, MemoryPtr<ASTNode> varSize = nullptr,
+        std::vector<MemoryPtr<RawTypeNode>> genericArguments = {})
+    : varType(std::move(varType)), varSize(std::move(varSize)), genericArguments(std::move(genericArguments)) {
         this->type = ASTNodeType::RawType;
     }
 
@@ -430,14 +443,12 @@ struct InterfaceNode : ASTNode {
     std::string name;
     std::vector<MemoryPtr<CallExpressionNode>> decorators;
     std::vector<MemoryPtr<ModifierNode>> modifiers;
+    std::vector<GenericParameter> genericParameters;
     std::vector<MemoryPtr<InterfaceFieldNode>> elements;
 
-    InterfaceNode(const std::string& name, std::vector<MemoryPtr<InterfaceFieldNode>> elements, std::vector<MemoryPtr<CallExpressionNode>> decorators = std::vector<MemoryPtr<CallExpressionNode>>{}, std::vector<MemoryPtr<ModifierNode>> modifiers = std::vector<MemoryPtr<ModifierNode>>{})
-    : name(name) {
+    InterfaceNode(const std::string& name, std::vector<MemoryPtr<InterfaceFieldNode>> elements, std::vector<MemoryPtr<CallExpressionNode>> decorators = {}, std::vector<MemoryPtr<ModifierNode>> modifiers = {}, std::vector<GenericParameter> genericParameters = {})
+    : name(name), elements(std::move(elements)), decorators(std::move(decorators)), modifiers(std::move(modifiers)), genericParameters(std::move(genericParameters)) {
         this->type = ASTNodeType::Interface;
-        this->elements = std::move(elements);
-        this->decorators = std::move(decorators);
-        this->modifiers = std::move(modifiers);
     }
 
     // Suggested by AI. If it fails, it's his fault
@@ -460,14 +471,16 @@ struct LambdaNode : ASTNode {
 struct FunctionNode : ASTNode {
     std::vector<MemoryPtr<CallExpressionNode>> decorators;
     std::vector<MemoryPtr<ModifierNode>> modifiers;
+    std::vector<GenericParameter> genericParameters;
+
     std::string name;
     std::vector<MemoryPtr<ParameterNode>> parameters;
     MemoryPtr<RawTypeNode> returnType = nullptr;
     MemoryPtr<BlockNode> body;
     bool isIntrinsic = false; // Is this a function that passes through an LLVM call?
 
-    FunctionNode(const std::string& name, std::vector<MemoryPtr<ParameterNode>> parameters, MemoryPtr<RawTypeNode> returnType, MemoryPtr<BlockNode> body,std::vector<MemoryPtr<CallExpressionNode>> decorators = {}, std::vector<MemoryPtr<ModifierNode>> modifiers = {})
-        : name(name), parameters(std::move(parameters)), body(std::move(body)), decorators(std::move(decorators)), modifiers(std::move(modifiers)), returnType(std::move(returnType)) {
+    FunctionNode(const std::string& name, std::vector<MemoryPtr<ParameterNode>> parameters, MemoryPtr<RawTypeNode> returnType, MemoryPtr<BlockNode> body,std::vector<MemoryPtr<CallExpressionNode>> decorators = {}, std::vector<MemoryPtr<ModifierNode>> modifiers = {}, std::vector<GenericParameter> genericParameters = {})
+        : name(name), parameters(std::move(parameters)), body(std::move(body)), decorators(std::move(decorators)), modifiers(std::move(modifiers)), genericParameters(std::move(genericParameters)), returnType(std::move(returnType)) {
         this->type = ASTNodeType::Function;
     }
 
@@ -500,12 +513,13 @@ struct ClassNode : ASTNode {
     MemoryPtr<VariableNode> super = nullptr; // Name of class or interface being inherited from, if any
     std::vector<MemoryPtr<CallExpressionNode>> decorators;
     std::vector<MemoryPtr<ModifierNode>> modifiers;
+    std::vector<GenericParameter> genericParameters;
     std::vector<MemoryPtr<DeclarationNode>> fields;
     std::vector<MemoryPtr<FunctionNode>> methods;
 
     ClassNode(const std::string& name, MemoryPtr<FunctionNode> constructor, MemoryPtr<VariableNode> super, std::vector<MemoryPtr<DeclarationNode>> fields, std::vector<MemoryPtr<FunctionNode>> methods,
-              std::vector<MemoryPtr<CallExpressionNode>> decorators = std::vector<MemoryPtr<CallExpressionNode>>{}, std::vector<MemoryPtr<ModifierNode>> modifiers = std::vector<MemoryPtr<ModifierNode>>{})
-        : name(name), constructor(std::move(constructor)), super(std::move(super)), fields(std::move(fields)), methods(std::move(methods)), decorators(std::move(decorators)), modifiers(std::move(modifiers)) {
+              std::vector<MemoryPtr<CallExpressionNode>> decorators = {}, std::vector<MemoryPtr<ModifierNode>> modifiers = {}, std::vector<GenericParameter> genericParameters = {})
+        : name(name), constructor(std::move(constructor)), super(std::move(super)), fields(std::move(fields)), methods(std::move(methods)), decorators(std::move(decorators)), modifiers(std::move(modifiers)), genericParameters(std::move(genericParameters)) {
         this->type = ASTNodeType::Class;
     }
 

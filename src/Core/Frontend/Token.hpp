@@ -47,7 +47,8 @@ enum class Preprocessors {
     Import, Unsafe, Macro
 };
 enum class Delimeters {
-    LeftParen, RightParen, LeftBracket, RightBracket, Semicolon, Newline, Comma, Dot, LeftBraces, RightBraces, Colon
+    LeftParen, RightParen, LeftBracket, RightBracket, Semicolon, Newline, Comma, Dot,
+    LeftBraces, RightBraces, Colon,
 };
 
 // ResolvedType is an enum of types Neoluma compiler internally supports by default.

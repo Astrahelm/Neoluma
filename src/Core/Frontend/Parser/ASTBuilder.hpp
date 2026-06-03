@@ -156,8 +156,8 @@ struct ASTBuilder {
     }
 
     // Creates an InterfaceNode
-    static MemoryPtr<InterfaceNode> createInterface(const std::string& name, std::vector<MemoryPtr<InterfaceFieldNode>> elements, std::vector<MemoryPtr<CallExpressionNode>> decorators = {}, std::vector<MemoryPtr<ModifierNode>> modifiers = {}) {
-        return makeMemoryPtr<InterfaceNode>(name, std::move(elements), std::move(decorators), std::move(modifiers));
+    static MemoryPtr<InterfaceNode> createInterface(const std::string& name, std::vector<MemoryPtr<InterfaceFieldNode>> elements, std::vector<MemoryPtr<CallExpressionNode>> decorators = {}, std::vector<MemoryPtr<ModifierNode>> modifiers = {}, std::vector<GenericParameter> genericParameters = {}) {
+        return makeMemoryPtr<InterfaceNode>(name, std::move(elements), std::move(decorators), std::move(modifiers), std::move(genericParameters));
     }
 
     // Creates a LambdaNode
@@ -166,13 +166,13 @@ struct ASTBuilder {
     }
 
     // Creates a FunctionNode
-    static MemoryPtr<FunctionNode> createFunction(const std::string& name, std::vector<MemoryPtr<ParameterNode>> parameters, MemoryPtr<RawTypeNode> returnType, MemoryPtr<BlockNode> body, std::vector<MemoryPtr<CallExpressionNode>> decorators = {}, std::vector<MemoryPtr<ModifierNode>> modifiers = {}) {
-        return makeMemoryPtr<FunctionNode>(name, std::move(parameters), std::move(returnType), std::move(body), std::move(decorators), std::move(modifiers));
+    static MemoryPtr<FunctionNode> createFunction(const std::string& name, std::vector<MemoryPtr<ParameterNode>> parameters, MemoryPtr<RawTypeNode> returnType, MemoryPtr<BlockNode> body, std::vector<MemoryPtr<CallExpressionNode>> decorators = {}, std::vector<MemoryPtr<ModifierNode>> modifiers = {}, std::vector<GenericParameter> genericParameters = {}) {
+        return makeMemoryPtr<FunctionNode>(name, std::move(parameters), std::move(returnType), std::move(body), std::move(decorators), std::move(modifiers), std::move(genericParameters));
     }
 
     // Creates a ClassNode
-    static MemoryPtr<ClassNode> createClass(const std::string& name, MemoryPtr<FunctionNode> constructor, MemoryPtr<VariableNode> super, std::vector<MemoryPtr<DeclarationNode>> fields, std::vector<MemoryPtr<FunctionNode>> methods, std::vector<MemoryPtr<CallExpressionNode>> decorators = {}, std::vector<MemoryPtr<ModifierNode>> modifiers = {}) {
-        return makeMemoryPtr<ClassNode>(name, std::move(constructor), std::move(super), std::move(fields), std::move(methods), std::move(decorators), std::move(modifiers));
+    static MemoryPtr<ClassNode> createClass(const std::string& name, MemoryPtr<FunctionNode> constructor, MemoryPtr<VariableNode> super, std::vector<MemoryPtr<DeclarationNode>> fields, std::vector<MemoryPtr<FunctionNode>> methods, std::vector<MemoryPtr<CallExpressionNode>> decorators = {}, std::vector<MemoryPtr<ModifierNode>> modifiers = {}, std::vector<GenericParameter> genericParameters = {}) {
+        return makeMemoryPtr<ClassNode>(name, std::move(constructor), std::move(super), std::move(fields), std::move(methods), std::move(decorators), std::move(modifiers), std::move(genericParameters));
     }
 
     // Creates a DecoratorNode
@@ -196,8 +196,8 @@ struct ASTBuilder {
     }
 
     // Creates a RawTypeNode
-    static MemoryPtr<RawTypeNode> createRawType(MemoryPtr<VariableNode> varType, MemoryPtr<ASTNode> varSize = nullptr) {
-        return makeMemoryPtr<RawTypeNode>(std::move(varType), std::move(varSize));
+    static MemoryPtr<RawTypeNode> createRawType(MemoryPtr<VariableNode> varType, MemoryPtr<ASTNode> varSize = nullptr, std::vector<MemoryPtr<RawTypeNode>> genericArguments = {}) {
+        return makeMemoryPtr<RawTypeNode>(std::move(varType), std::move(varSize), std::move(genericArguments));
     }
 
     // Creates a ModuleNode

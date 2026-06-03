@@ -1,10 +1,9 @@
 #pragma once
 
-#include "../Lexer/Lexer.hpp"
 #include "../Nodes.hpp"
 #include "../Token.hpp"
 #include "Core/Extras/ErrorManager/ErrorManager.hpp"
-
+#include <optional>
 
 // to make math order
 int getOperatorPrecedence(const std::string& op);
@@ -18,8 +17,8 @@ public:
 
     // ErrorManager is used to report errors
     ErrorManager* errorManager = nullptr;
-private:
     MemoryPtr<ModuleNode> moduleSource = nullptr;
+private:
     std::vector<Token> tokens;
     size_t pos = 0;
     std::string moduleName = "";
@@ -106,6 +105,9 @@ private:
     MemoryPtr<ASTNode> parseExpression();
     MemoryPtr<ASTNode> parseBinary(int prevPrecedence = 0);
     MemoryPtr<UnaryOperationNode> parseUnary(const std::string& op);
+
+    std::optional<std::vector<GenericParameter>> parseGenericParameters(const std::string& ownerName);
+    std::optional<std::vector<MemoryPtr<RawTypeNode>>> parseGenericArguments(const std::string& typeName);
     MemoryPtr<RawTypeNode> parseType();
 
     // Statement parsing
@@ -121,7 +123,7 @@ private:
     MemoryPtr<WhileLoopNode> parseWhile();
 
     // Declarations
-    MemoryPtr<FunctionNode> parseFunction(std::vector<MemoryPtr<CallExpressionNode>> decorators, std::vector<MemoryPtr<ModifierNode>> modifiers, bool isIntrinsic);
+    MemoryPtr<FunctionNode> parseFunction(std::vector<MemoryPtr<CallExpressionNode>> decorators, std::vector<MemoryPtr<ModifierNode>> modifiers);
     MemoryPtr<ClassNode> parseClass(std::vector<MemoryPtr<CallExpressionNode>> decorators, std::vector<MemoryPtr<ModifierNode>> modifiers);
     MemoryPtr<NamespaceNode> parseNamespace();
     MemoryPtr<BlockNode> parseBlock();

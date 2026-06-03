@@ -39,7 +39,7 @@ void Compiler::check(bool jsonOutput) {
         MemoryPtr<ModuleNode> tree = std::move(parser.moduleSource);
 
         // Adding modules to program's tree
-        if (!tree) std::println(std::cerr, "NULL TREE: {}", file.string());
+        if (!tree) std::println(std::cerr, "[Neoluma/check] An empty tree was found for: {}", file.string());
         if (tree) program.modules.push_back(std::move(tree));
     }
 

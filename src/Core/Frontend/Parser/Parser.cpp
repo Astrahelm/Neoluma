@@ -483,40 +483,200 @@ MemoryPtr<ASTNode> Parser::parsePrimary() {
     return nullptr;
 }
 
-MemoryPtr<RawTypeNode> Parser::parseType() {
-    if (!match(TokenType::Identifier)){
-        errorManager->addError(
-            ErrorType::Syntax, SyntaxErrors::MissingToken,
+std::optional<std::vector<GenericParameter>> Parser::parseGenericParameters(const std::string& ownerName) {
+    std::vector<GenericParameter> parameters;
+
+    if (!match(Operators::LessThan)) return parameters;
+
+    Token openToken = curToken();
+    next();
+
+    if (match(Operators::GreaterThan)) {
+        errorManager->addError(ErrorType::Syntax, SyntaxErrors::MissingToken,
+            ErrorSpan{openToken.filePath, openToken.value, openToken.line, openToken.column},
+            "ErrorManager.Syntax.MissingToken.genericParameter.message",
+            {ownerName},
+            "ErrorManager.Syntax.MissingToken.genericParameter.hint");
+        return std::nullopt;
+    }
+
+    while (!isAtEnd()) {
+        Token nameToken = curToken();
+
+        if (!match(TokenType::Identifier)) {
+            errorManager->addError(ErrorType::Syntax, SyntaxErrors::MissingToken,
+                ErrorSpan{nameToken.filePath, nameToken.value, nameToken.line, nameToken.column},
+                "ErrorManager.Syntax.MissingToken.genericParameter.message",
+                {ownerName},
+                "ErrorManager.Syntax.MissingToken.genericParameter.hint");
+            return std::nullopt;
+        }
+
+        for (const auto& parameter : parameters) {
+            if (parameter.name == nameToken.value) {
+                errorManager->addError(ErrorType::Syntax, SyntaxErrors::InvalidStatement,
+                    ErrorSpan{nameToken.filePath, nameToken.value, nameToken.line, nameToken.column},
+                    "ErrorManager.Syntax.InvalidStatement.duplicateGenericParameter.message",
+                    {nameToken.value, ownerName},
+                    "ErrorManager.Syntax.InvalidStatement.duplicateGenericParameter.hint");
+                return std::nullopt;
+            }
+        }
+
+        parameters.push_back(GenericParameter{
+            .name = nameToken.value,
+            .line = nameToken.line,
+            .column = nameToken.column,
+            .filePath = nameToken.filePath
+        });
+
+        next();
+
+        if (match(Delimeters::Comma)) {
+            next();
+
+            if (match(Operators::GreaterThan)) {
+                errorManager->addError(ErrorType::Syntax, SyntaxErrors::MissingToken,
+                    ErrorSpan{curToken().filePath, curToken().value, curToken().line, curToken().column},
+                    "ErrorManager.Syntax.MissingToken.genericParameter.message",
+                    {ownerName},
+                    "ErrorManager.Syntax.MissingToken.genericParameter.hint");
+                return std::nullopt;
+            }
+            continue;
+        }
+        break;
+    }
+
+    if (!match(Operators::GreaterThan)) {
+        errorManager->addError(ErrorType::Syntax, SyntaxErrors::MissingToken,
             ErrorSpan{curToken().filePath, curToken().value, curToken().line, curToken().column},
-            "ErrorManager.Syntax.InvalidStatement.noType.message", {},
+            "ErrorManager.Syntax.MissingToken.genericClosingAngle.message",
+            {ownerName},
+            "ErrorManager.Syntax.MissingToken.genericClosingAngle.hint");
+        return std::nullopt;
+    }
+    next();
+
+    return parameters;
+}
+
+std::optional<std::vector<MemoryPtr<RawTypeNode>>> Parser::parseGenericArguments(const std::string& typeName) {
+    std::vector<MemoryPtr<RawTypeNode>> arguments;
+
+    if (!match(Operators::LessThan)) return arguments;
+
+    Token openToken = curToken();
+    next();
+
+    if (match(Operators::GreaterThan)) {
+        errorManager->addError(ErrorType::Syntax, SyntaxErrors::MissingToken,
+            ErrorSpan{openToken.filePath, openToken.value, openToken.line, openToken.column},
+            "ErrorManager.Syntax.MissingToken.genericTypeArgument.message",
+            {typeName},
+            "ErrorManager.Syntax.MissingToken.genericTypeArgument.hint"
+        );
+        return std::nullopt;
+    }
+
+    while (!isAtEnd()) {
+        auto argument = parseType();
+
+        if (!argument) {
+            errorManager->addError(ErrorType::Syntax, SyntaxErrors::MissingToken,
+                ErrorSpan{curToken().filePath, curToken().value, curToken().line, curToken().column},
+                "ErrorManager.Syntax.MissingToken.genericTypeArgument.message",
+                {typeName},
+                "ErrorManager.Syntax.MissingToken.genericTypeArgument.hint"
+            );
+            return std::nullopt;
+        }
+
+        arguments.push_back(std::move(argument));
+
+        if (match(Delimeters::Comma)) {
+            next();
+            if (match(Operators::GreaterThan)) {
+                errorManager->addError(ErrorType::Syntax, SyntaxErrors::MissingToken,
+                    ErrorSpan{curToken().filePath, curToken().value, curToken().line, curToken().column},
+                    "ErrorManager.Syntax.MissingToken.genericTypeArgument.message",
+                    {typeName},
+                    "ErrorManager.Syntax.MissingToken.genericTypeArgument.hint"
+                );
+                return std::nullopt;
+            }
+            continue;
+        }
+        break;
+    }
+
+    if (!match(Operators::GreaterThan)) {
+        errorManager->addError(ErrorType::Syntax, SyntaxErrors::MissingToken,
+            ErrorSpan{curToken().filePath, curToken().value, curToken().line, curToken().column},
+            "ErrorManager.Syntax.MissingToken.genericClosingAngle.message",
+            {typeName},
+            "ErrorManager.Syntax.MissingToken.genericClosingAngle.hint");
+        return std::nullopt;
+    }
+    next();
+
+    return arguments;
+}
+
+MemoryPtr<RawTypeNode> Parser::parseType() {
+    Token typeToken = curToken();
+
+    if (!match(TokenType::Identifier)) {
+        errorManager->addError(ErrorType::Syntax, SyntaxErrors::MissingToken,
+            ErrorSpan{typeToken.filePath, typeToken.value, typeToken.line, typeToken.column},
+            "ErrorManager.Syntax.InvalidStatement.noType.message",
+            {},
             "ErrorManager.Syntax.InvalidStatement.noType.hint");
         return nullptr;
     }
-    MemoryPtr<VariableNode> varType = ASTBuilder::createVariable(curToken().value);
+
+    std::string typeName = typeToken.value;
+    MemoryPtr<VariableNode> varType = ASTBuilder::createVariable(typeName);
     next();
 
+    auto result = parseGenericArguments(typeName);
+    if (!result) return nullptr;
+
+    std::vector<MemoryPtr<RawTypeNode>> genericArguments = std::move(*result);
+
     MemoryPtr<ASTNode> varSize = nullptr;
-    if (match(Delimeters::LeftBracket)){
+
+    if (match(Delimeters::LeftBracket)) {
         next();
-        if (match(TokenType::Identifier) || match(TokenType::Number)) varSize = parseExpression();
-        if (!match(Delimeters::RightBracket))
-        {
-            errorManager->addError(
-                ErrorType::Syntax, SyntaxErrors::MissingToken,
+        if (!match(Delimeters::RightBracket)) {
+            varSize = parseExpression();
+            if (!varSize) {
+                errorManager->addError(ErrorType::Syntax, SyntaxErrors::MissingToken,
+                    ErrorSpan{curToken().filePath, curToken().value, curToken().line, curToken().column},
+                    "ErrorManager.Syntax.MissingToken.arraySize.message",
+                    {typeName},
+                    "ErrorManager.Syntax.MissingToken.arraySize.hint");
+                return nullptr;
+            }
+        }
+
+        if (!match(Delimeters::RightBracket)) {
+            errorManager->addError(ErrorType::Syntax, SyntaxErrors::MissingToken,
                 ErrorSpan{curToken().filePath, curToken().value, curToken().line, curToken().column},
-                "ErrorManager.Syntax.MissingToken.closingBracket.message", {},
+                "ErrorManager.Syntax.MissingToken.closingBracket.message",
+                {},
                 "ErrorManager.Syntax.MissingToken.closingBracket.hint");
             return nullptr;
         }
         next();
     }
 
-    return ASTBuilder::createRawType(std::move(varType), std::move(varSize));
+    auto node = ASTBuilder::createRawType(std::move(varType), std::move(varSize), std::move(genericArguments));
+    node->line = typeToken.line; node->column = typeToken.column; node->filePath = typeToken.filePath;
+    return node;
 }
 
-MemoryPtr<DeclarationNode> Parser::parseDeclaration(std::vector<MemoryPtr<CallExpressionNode>> decorators, std::vector<MemoryPtr<ModifierNode>> modifiers)
-{
-
+MemoryPtr<DeclarationNode> Parser::parseDeclaration(std::vector<MemoryPtr<CallExpressionNode>> decorators, std::vector<MemoryPtr<ModifierNode>> modifiers){
     Token token = curToken();
     MemoryPtr<VariableNode> var = ASTBuilder::createVariable(token.value);
     next();
@@ -524,7 +684,6 @@ MemoryPtr<DeclarationNode> Parser::parseDeclaration(std::vector<MemoryPtr<CallEx
     bool isNullable = false;
     if (match(Operators::Nullable)) { isNullable = true; next(); }
 
-    // TODO for later: Allow generics in code like array<int> and others. It allows using explicit types for sets, dicts and etc.
     MemoryPtr<RawTypeNode> rawType = nullptr;
     if (!match(Delimeters::Colon)) {
         errorManager->addError(
@@ -1052,24 +1211,44 @@ MemoryPtr<FunctionNode> Parser::parseFunction(std::vector<MemoryPtr<CallExpressi
         returnType = parseType();
     }
 
-    MemoryPtr<BlockNode> body = parseBlock();
-    if (!body) {
-        errorManager->addError(
-            ErrorType::Syntax, SyntaxErrors::InvalidStatement,
-            ErrorSpan{nameToken.filePath, nameToken.value, nameToken.line, nameToken.column},
-            "ErrorManager.Syntax.MissingToken.functionBody.message", {funcName},
-            "ErrorManager.Syntax.MissingToken.functionBody.hint", {funcName});
-        return nullptr;
+    bool isIntrinsic = false;
+    for (const auto& modifier : modifiers) {
+        if (modifier && modifier->modifier == ASTModifierType::Intrinsic) {
+            isIntrinsic = true;
+            break;
+        }
+    }
+
+    MemoryPtr<BlockNode> body = nullptr;
+
+    if (isIntrinsic) {
+        while (isNextLine()) next();
+
+        if (match(Delimeters::RightBraces) || isAtEnd()) {} // не понял че тут
+        else if (match(Delimeters::LeftBraces)) {
+            errorManager->addError(ErrorType::Syntax, SyntaxErrors::InvalidStatement,
+                ErrorSpan{curToken().filePath, curToken().value, curToken().line, curToken().column},
+                "ErrorManager.Syntax.InvalidStatement.intrinsicBody.message",
+                {funcName},
+                "ErrorManager.Syntax.InvalidStatement.intrinsicBody.hint");
+            return nullptr;
+        }
+    }
+    else {
+        body = parseBlock();
+        if (!body) {
+            errorManager->addError(
+                ErrorType::Syntax, SyntaxErrors::InvalidStatement,
+                ErrorSpan{nameToken.filePath, nameToken.value, nameToken.line, nameToken.column},
+                "ErrorManager.Syntax.MissingToken.functionBody.message", {funcName},
+                "ErrorManager.Syntax.MissingToken.functionBody.hint", {funcName});
+            return nullptr;
+        }
     }
 
     auto node = ASTBuilder::createFunction(funcName, std::move(params), std::move(returnType), std::move(body), std::move(decorators), std::move(modifiers));
-    for (const auto& modifier : modifiers) {
-        if (modifier->modifier == ASTModifierType::Intrinsic) {
-            node->isIntrinsic = true;
-            node->body = nullptr;
-        }
-    }
     node->line = nameToken.line; node->column = nameToken.column; node->filePath = nameToken.filePath;
+    node->isIntrinsic = isIntrinsic;
     return node;
 }
 
