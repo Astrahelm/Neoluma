@@ -561,76 +561,13 @@ std::optional<std::vector<GenericParameter>> Parser::parseGenericParameters(cons
     return parameters;
 }
 
-std::optional<std::vector<MemoryPtr<RawTypeNode>>> Parser::parseGenericArguments(const std::string& typeName) {
-    std::vector<MemoryPtr<RawTypeNode>> arguments;
-
-    if (!match(Operators::LessThan)) return arguments;
-
-    Token openToken = curToken();
-    next();
-
-    if (match(Operators::GreaterThan)) {
-        errorManager->addError(ErrorType::Syntax, SyntaxErrors::MissingToken,
-            ErrorSpan{openToken.filePath, openToken.value, openToken.line, openToken.column},
-            "ErrorManager.Syntax.MissingToken.genericTypeArgument.message",
-            {typeName},
-            "ErrorManager.Syntax.MissingToken.genericTypeArgument.hint"
-        );
-        return std::nullopt;
-    }
-
-    while (!isAtEnd()) {
-        auto argument = parseType();
-
-        if (!argument) {
-            errorManager->addError(ErrorType::Syntax, SyntaxErrors::MissingToken,
-                ErrorSpan{curToken().filePath, curToken().value, curToken().line, curToken().column},
-                "ErrorManager.Syntax.MissingToken.genericTypeArgument.message",
-                {typeName},
-                "ErrorManager.Syntax.MissingToken.genericTypeArgument.hint"
-            );
-            return std::nullopt;
-        }
-
-        arguments.push_back(std::move(argument));
-
-        if (match(Delimeters::Comma)) {
-            next();
-            if (match(Operators::GreaterThan)) {
-                errorManager->addError(ErrorType::Syntax, SyntaxErrors::MissingToken,
-                    ErrorSpan{curToken().filePath, curToken().value, curToken().line, curToken().column},
-                    "ErrorManager.Syntax.MissingToken.genericTypeArgument.message",
-                    {typeName},
-                    "ErrorManager.Syntax.MissingToken.genericTypeArgument.hint"
-                );
-                return std::nullopt;
-            }
-            continue;
-        }
-        break;
-    }
-
-    if (!match(Operators::GreaterThan)) {
-        errorManager->addError(ErrorType::Syntax, SyntaxErrors::MissingToken,
-            ErrorSpan{curToken().filePath, curToken().value, curToken().line, curToken().column},
-            "ErrorManager.Syntax.MissingToken.genericClosingAngle.message",
-            {typeName},
-            "ErrorManager.Syntax.MissingToken.genericClosingAngle.hint");
-        return std::nullopt;
-    }
-    next();
-
-    return arguments;
-}
-
 MemoryPtr<RawTypeNode> Parser::parseType() {
     Token typeToken = curToken();
 
     if (!match(TokenType::Identifier)) {
         errorManager->addError(ErrorType::Syntax, SyntaxErrors::MissingToken,
             ErrorSpan{typeToken.filePath, typeToken.value, typeToken.line, typeToken.column},
-            "ErrorManager.Syntax.InvalidStatement.noType.message",
-            {},
+            "ErrorManager.Syntax.InvalidStatement.noType.message", {},
             "ErrorManager.Syntax.InvalidStatement.noType.hint");
         return nullptr;
     }
@@ -645,16 +582,15 @@ MemoryPtr<RawTypeNode> Parser::parseType() {
     std::vector<MemoryPtr<RawTypeNode>> genericArguments = std::move(*result);
 
     MemoryPtr<ASTNode> varSize = nullptr;
-
     if (match(Delimeters::LeftBracket)) {
         next();
+
         if (!match(Delimeters::RightBracket)) {
             varSize = parseExpression();
             if (!varSize) {
                 errorManager->addError(ErrorType::Syntax, SyntaxErrors::MissingToken,
                     ErrorSpan{curToken().filePath, curToken().value, curToken().line, curToken().column},
-                    "ErrorManager.Syntax.MissingToken.arraySize.message",
-                    {typeName},
+                    "ErrorManager.Syntax.MissingToken.arraySize.message", {typeName},
                     "ErrorManager.Syntax.MissingToken.arraySize.hint");
                 return nullptr;
             }
@@ -663,11 +599,11 @@ MemoryPtr<RawTypeNode> Parser::parseType() {
         if (!match(Delimeters::RightBracket)) {
             errorManager->addError(ErrorType::Syntax, SyntaxErrors::MissingToken,
                 ErrorSpan{curToken().filePath, curToken().value, curToken().line, curToken().column},
-                "ErrorManager.Syntax.MissingToken.closingBracket.message",
-                {},
+                "ErrorManager.Syntax.MissingToken.closingBracket.message", {},
                 "ErrorManager.Syntax.MissingToken.closingBracket.hint");
             return nullptr;
         }
+
         next();
     }
 
@@ -2105,4 +2041,76 @@ std::string Parser::namespaceNameToString(ASTNode* node) {
     }
 
     return "<invalid namespace>";
+}
+
+bool Parser::consumeTypeCloseAngle() {
+    if (match(Operators::GreaterThan)) {
+        next();
+        return true;
+    }
+
+    if (match(Operators::BitwiseRightShift)) {
+        tokens[pos].value = ">";
+        tokens[pos].column += 1;
+        return true;
+    }
+
+    return false;
+}
+
+// TODO: This needs an additional check to make sure of it's correctness. i don't have the energy to do it now
+std::optional<std::vector<MemoryPtr<RawTypeNode>>> Parser::parseGenericArguments(const std::string& typeName) {
+    std::vector<MemoryPtr<RawTypeNode>> arguments;
+
+    if (!match(Operators::LessThan)) return std::optional(std::move(arguments));
+
+    Token openToken = curToken();
+    next();
+
+    if (match(Operators::GreaterThan) || match(Operators::BitwiseRightShift)) {
+        errorManager->addError(ErrorType::Syntax, SyntaxErrors::MissingToken,
+            ErrorSpan{openToken.filePath, openToken.value, openToken.line, openToken.column},
+            "ErrorManager.Syntax.MissingToken.genericTypeArgument.message", {typeName},
+            "ErrorManager.Syntax.MissingToken.genericTypeArgument.hint");
+        return std::nullopt;
+    }
+
+    while (!isAtEnd()) {
+        if (match(Delimeters::Comma) || match(Operators::GreaterThan) || match(Operators::BitwiseRightShift)) {
+            errorManager->addError(ErrorType::Syntax, SyntaxErrors::MissingToken,
+                ErrorSpan{curToken().filePath, curToken().value, curToken().line, curToken().column},
+                "ErrorManager.Syntax.MissingToken.genericTypeArgument.message", {typeName},
+                "ErrorManager.Syntax.MissingToken.genericTypeArgument.hint");
+            return std::nullopt;
+        }
+
+        auto argument = parseType();
+        if (!argument) return std::nullopt;
+        arguments.push_back(std::move(argument));
+
+        if (match(Delimeters::Comma)) {
+            next();
+            if (match(Operators::GreaterThan) || match(Operators::BitwiseRightShift)) {
+                errorManager->addError(ErrorType::Syntax, SyntaxErrors::MissingToken,
+                    ErrorSpan{curToken().filePath, curToken().value, curToken().line, curToken().column},
+                    "ErrorManager.Syntax.MissingToken.genericTypeArgument.message", {typeName},
+                    "ErrorManager.Syntax.MissingToken.genericTypeArgument.hint");
+                return std::nullopt;
+            }
+            continue;
+        }
+        break;
+    }
+
+    if (!match(Operators::GreaterThan)) {
+        errorManager->addError(ErrorType::Syntax, SyntaxErrors::MissingToken,
+            ErrorSpan{curToken().filePath, curToken().value, curToken().line, curToken().column},
+            "ErrorManager.Syntax.MissingToken.genericClosingAngle.message",
+            {typeName},
+            "ErrorManager.Syntax.MissingToken.genericClosingAngle.hint");
+        return std::nullopt;
+    }
+    next();
+
+    return arguments;
 }

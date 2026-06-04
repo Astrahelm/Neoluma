@@ -144,7 +144,13 @@
 			"decoratorClosingParen.hint": "Close the parameter list with ')'.",
 
 			"decoratorBody.message": "Missing body for decorator '{}'",
-			"decoratorBody.hint": "Add a block body after the decorator signature."
+			"decoratorBody.hint": "Add a block body after the decorator signature.",
+
+			"genericTypeArgument.message": "Expected generic type argument for '{}'.",
+			"genericTypeArgument.hint": "Write a type inside angle brackets, for example '{}<str>'.",
+
+			"genericClosingAngle.message": "Expected closing '>' for generic type '{}'.",
+			"genericClosingAngle.hint": "Close the generic type argument list with '>'."
 		},
 
 		"InvalidStatement": {
@@ -195,6 +201,8 @@
 
 			"intrinsicBody.message": "{} cannot have a function body while being an intrinsic function",
 			"intrinsicBody.hint": "Intrinsic calls are reserved for LLVM layer. Remove the curly braces."
+
+
 		},
 
 		"InvalidNumberFormat.message": "Invalid number format: '{}'",

@@ -107,7 +107,6 @@ private:
     MemoryPtr<UnaryOperationNode> parseUnary(const std::string& op);
 
     std::optional<std::vector<GenericParameter>> parseGenericParameters(const std::string& ownerName);
-    std::optional<std::vector<MemoryPtr<RawTypeNode>>> parseGenericArguments(const std::string& typeName);
     MemoryPtr<RawTypeNode> parseType();
 
     // Statement parsing
@@ -146,4 +145,6 @@ private:
     // Lookahead helper to check if upcoming tokens form an assignable lvalue followed by an assignment operator
     bool isAssignableAhead(size_t offset = 0);
     std::string namespaceNameToString(ASTNode* node);
+    bool consumeTypeCloseAngle();
+    std::optional<std::vector<MemoryPtr<RawTypeNode>>> parseGenericArguments(const std::string& typeName);
 };
