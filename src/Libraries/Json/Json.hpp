@@ -51,7 +51,7 @@ std::string out = json::stringify(root, {
 json::writeFile("out.jsonc", root);
 
 Notes:
-- Supports // and /.* *./ comments (without dots
+- Supports // and /.* *./ comments (without dots)
 - Supports trailing commas
 - Supports single-quoted strings
 - Duplicate keys: last one wins

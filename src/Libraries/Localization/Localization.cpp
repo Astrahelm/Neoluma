@@ -7,6 +7,7 @@
 
 #include "Libraries/Toml/Toml.hpp"
 #include "Libraries/Paths/Paths.hpp"
+#include "Libraries/Utils/Utils.hpp"
 #if _WIN32
     #include <Windows.h>
 #else
@@ -134,15 +135,15 @@ namespace Localization {
         //for (const auto& [k, v] : localeMap) std::println(std::cerr, "{}: {}", k, v);
     }
 
-    std::string translate(const std::string& key) {
+    String translate(const String& key) {
         if (auto it = localeMap.find(key); it != localeMap.end()) return it->second;
         std::println(std::cerr, "[Localization] Couldn't translate key '{}'", key);
         return key;
     }
 
     // Translate with {} formatting
-    std::string translatef(const std::string& key, const std::vector<std::string>& args)  {
-        std::string result = translate(key);
-        return formatStrVec(result, args);
+    String translatef(const String& key, const Array<String>& args)  {
+        String result = translate(key);
+        return String(result, args);
     }
 }

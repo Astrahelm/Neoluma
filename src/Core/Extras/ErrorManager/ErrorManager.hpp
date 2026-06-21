@@ -1,19 +1,8 @@
 #pragma once
-#include <unordered_map>
 #include <vector>
-#include <variant>
 
-#include "Core/Frontend/Nodes.hpp"
 #include "Libraries/Json/Json.hpp"
-
-enum struct ErrorType {
-    Syntax,
-    Analysis,
-    Preprocessor,
-    Codegen,
-    Runtime,
-    None
-};
+#include "HelperFunctions.hpp"
 
 // NSyE{x}
 enum struct SyntaxErrors {
@@ -30,10 +19,10 @@ enum struct SyntaxErrors {
 // NAnE{x}
 enum struct AnalysisErrors {
     // Variables & Scope
-    UndefinedVariable, 
-    RedefinedVariable, 
-    UninitializedVariable,  
-    ConstantReassignment, 
+    UndefinedVariable,
+    RedefinedVariable,
+    UninitializedVariable,
+    ConstantReassignment,
     VariableOutOfScope,
     ShadowedVariable,
 
@@ -54,7 +43,7 @@ enum struct AnalysisErrors {
     MissingSuperCall,
     InvalidSuperCall,
     AccessViolation,
-    InvalidOverride,  
+    InvalidOverride,
     OverrideSignatureMismatch,
 
     // Modifiers & Decorators
@@ -64,15 +53,15 @@ enum struct AnalysisErrors {
     UndefinedDecorator,
     DecoratorOnInvalidTarget,
     DecoratorArgumentMismatch,
-    MultipleEntryPoints,     
+    MultipleEntryPoints,
     NoEntryPoints,
 
     // Control Flow
-    BreakOutsideLoop,      
-    ContinueOutsideLoop,      
-    UnreachableCode,        
-    DuplicateCaseValue,   
-    CaseTypeMismatch,     
+    BreakOutsideLoop,
+    ContinueOutsideLoop,
+    UnreachableCode,
+    DuplicateCaseValue,
+    CaseTypeMismatch,
 
     // Interfaces & Enums
     InterfaceNotImplemented,
@@ -91,21 +80,21 @@ enum struct AnalysisErrors {
     AssignmentToNonLValue,
 
     // Core Type Errors
-    TypeMismatch, 
-    UnknownType,   
+    TypeMismatch,
+    UnknownType,
     InvalidCast,
     LiteralOverflow,
 
     // Operations
     AssignmentTypeMismatch,
-    BinaryOperationTypeMismatch, 
+    BinaryOperationTypeMismatch,
     UnaryOperationTypeMismatch,
-    ReturnTypeMismatch,          
-    ArgumentTypeMismatch,        
+    ReturnTypeMismatch,
+    ArgumentTypeMismatch,
 
     // Nullable
-    NullAssignmentToNonNullable, 
-    NullableAccessWithoutCheck, 
+    NullAssignmentToNonNullable,
+    NullableAccessWithoutCheck,
 
     // Collections
     ArrayElementTypeMismatch,
@@ -130,7 +119,7 @@ enum struct AnalysisErrors {
 // NPrE{x}
 enum struct PreprocessorErrors {
     // Import
-    ImportNotFound,         
+    ImportNotFound,
     CircularImport,
     ImportAliasConflict,
     InvalidImportPath,
@@ -174,32 +163,71 @@ enum struct RuntimeErrors {
     UnhandledError,
 };
 
+enum struct ErrorSeverity {
+    Error,
+    Warning,
+};
+
+using ErrorCode = Option<SyntaxErrors, AnalysisErrors, PreprocessorErrors, CodegenErrors, RuntimeErrors>;
+
 struct ErrorSpan {
-    int line, column = 1;
+    String filePath;
     int len = 0;
-    std::string filePath;
-    ErrorSpan(const std::string& filePath, const std::string& value, int line, int column): filePath(filePath), len((int)value.length()), line(line), column(column) {};
+    int line = 0;
+    int column = 1;
+
+    ErrorSpan(String filePath, String value, int line, int column): filePath(std::move(filePath)), len((int)std::move(value).length()), line(line), column(column) {};
+};
+
+// Additional context related to an error or warning.
+struct ErrorNote {
+    ErrorSpan span;
+    String messageKey;
+    Array<String> messageArgs;
 };
 
 struct Error {
-    ErrorType type;
-    std::variant<SyntaxErrors, AnalysisErrors, PreprocessorErrors, CodegenErrors, RuntimeErrors> detailedType;
+    ErrorSeverity severity;
+    ErrorCode code;
     ErrorSpan span;
 
-    std::string messageKey; // Message explaining what's wrong, takes localization key
-    std::vector<std::string> messageArgs; // Arguments to make message more precise
-    std::string hintKey; // Hint to fix the error, takes localization key
-    std::vector<std::string> hintArgs;// Arguments to make hints more precise
+    String messageKey; // Message explaining what's wrong, takes localization key
+    Array<String> messageArgs; // Arguments to make message more precise
+    String hintKey; // Hint to fix the error, takes localization key
+    Array<String> hintArgs;// Arguments to make hints more precise
+
+    Array<ErrorNote> notes;
+
+    Error(ErrorSeverity severity, ErrorCode code, ErrorSpan span, String messageKey, Array<String> messageArgs = {},
+    String hintKey = "", Array<String> hintArgs = {}, Array<ErrorNote> notes = {}) : severity(severity),
+    code(std::move(code)), span(std::move(span)), messageKey(std::move(messageKey)), messageArgs(std::move(messageArgs)),
+    hintKey(std::move(hintKey)), hintArgs(std::move(hintArgs)), notes(std::move(notes)) {}
 };
 
-struct ErrorManager {
-    std::vector<Error> errors;
+class ErrorManager {
+public:
+    void addError(ErrorCode code, ErrorSpan span, String messageKey, Array<String> messageArgs = {}, String hintKey = "",
+        Array<String> hintArgs = {}, Array<ErrorNote> notes = {}) { errors.push_back(Error{ErrorSeverity::Error, code, span,
+        messageKey, messageArgs, hintKey, hintArgs, notes});}
 
-    void addError(ErrorType type, std::variant<SyntaxErrors, AnalysisErrors, PreprocessorErrors, CodegenErrors, RuntimeErrors> detailedType, const ErrorSpan& span, const std::string& messageKey, std::vector<std::string> messageArgs = {}, const std::string& hintKey = "", std::vector<std::string> hintArgs = {}) { errors.push_back(Error{type, detailedType, span, messageKey, messageArgs, hintKey, hintArgs}); }
+    void addWarning(ErrorCode code, ErrorSpan span, String messageKey, Array<String> messageArgs = {}, String hintKey = "",
+        Array<String> hintArgs = {}, Array<ErrorNote> notes = {}) { errors.push_back(Error{ErrorSeverity::Warning, code, span,
+        messageKey, messageArgs, hintKey, hintArgs, notes}); }
+
+    [[nodiscard]] bool hasErrors() const {
+        for (const auto& error : errors) if (error.severity == ErrorSeverity::Error) return true;
+        return false;
+    }
+    [[nodiscard]] bool hasWarnings() const {
+        for (const auto& error : errors) if (error.severity == ErrorSeverity::Warning) return true;
+        return false;
+    }
     void printErrors();
+private:
+    Array<Error> errors;
+    static String formatCode(ErrorCode code);
+    static String formatColor(ErrorCode code);
+    static String formatIcon(ErrorSeverity severity);
+    static String formatSeverity(ErrorSeverity severity);
     json::Value toJson() const;
-    [[nodiscard]] bool hasErrors() const { return !errors.empty(); }
-
-    static std::string formatErrorType(std::variant<SyntaxErrors, AnalysisErrors, PreprocessorErrors, CodegenErrors, RuntimeErrors> detailedType);
-    static std::string formatStage(ErrorType type);
 };

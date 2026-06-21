@@ -1,6 +1,7 @@
 #pragma once
 
 #include <vector>
+#include <unordered_map>
 #include <string>
 #include <sstream>
 #include <filesystem>
@@ -8,9 +9,11 @@
 #include <variant>
 #include <print>
 
+// Alias of std::unique_ptr
 template<typename T>
 using MemoryPtr = std::unique_ptr<T>;
 
+// Alias of std::variant
 template<typename... T>
 using Option = std::variant<T...>;
 
@@ -65,29 +68,8 @@ MemoryPtr<T> as(MemoryPtr<U> ptr) {
 }
 
 // Other
-
-std::string trim(const std::string& s);
-
-// Splits the string by delimeter
-std::vector<std::string> split(std::string str, char delimiter);
-
 // Reads the file
 std::string readFile(const std::string& filePath);
 
-// String formatting
-template<typename T>
-std::string anyToStr(T&& v) {
-    std::ostringstream oss;
-    oss << std::forward<T>(v);
-    return oss.str();
-}
-
-// an impl function so i don't have to stupidly duplicate the formatStr code
-std::string formatStrVec(const std::string& fmt, const std::vector<std::string>& collectedArgs);
-
-template<typename... Args>
-std::string formatStr(const std::string& fmt, Args&&... args)
-{
-    std::vector<std::string> collectedArgs = { anyToStr(args)... };
-    return formatStrVec(fmt, collectedArgs);
-}
+// turns \\ into / cuz screw how windows is made
+std::string normalizePath(const std::string& path);
