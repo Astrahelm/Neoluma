@@ -1,2 +1,0 @@
-@entry
-fn main(value: int, value: int) {}

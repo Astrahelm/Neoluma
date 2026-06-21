@@ -1,6 +1,0 @@
-namespace std.time {
-    intrinsic fn unixTime() -> int;       // seconds
-    intrinsic fn unixTimeMs() -> int;     // milliseconds
-
-    intrinsic fn sleepMs(ms: int);
-}

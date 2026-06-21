@@ -1,5 +1,0 @@
-{
-	"toml": {
-        "tableOutOfBoundsError": "Ключ '{}' не найден"
-    }
-}

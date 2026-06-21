@@ -1,4 +1,0 @@
-@entry
-fn main() {
-    missing()
-}
