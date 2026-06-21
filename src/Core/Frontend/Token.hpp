@@ -17,7 +17,6 @@ struct Token {
 };
 
 // Enums
-
 enum class Keywords {
     Function, Class, Enum, Interface, Namespace,
     If, Else,
@@ -28,7 +27,8 @@ enum class Keywords {
     Yield, Return,
     Static, Decorator, Const,
     As, With, In, Lambda,
-    Debug, Public, Protected, Private, Override
+    Debug, Public, Protected, Private, Override,
+    Intrinsic
 };
 enum class Operators {
     Add, Subtract, Multiply, Divide, Modulo, Power,
@@ -41,32 +41,37 @@ enum class Operators {
     //BitwiseUnsignedRightShift (from JS, not included for now because argued about)
 };
 enum class Decorators {
-    Float, Entry, Unsafe, Comptime
+    Entry, Unsafe, Comptime
 };
 enum class Preprocessors {
-    Import, Unsafe, Baremetal, Float, Macro
+    Import, Unsafe, Macro
 };
 enum class Delimeters {
-    LeftParen, RightParen, LeftBracket, RightBracket, Semicolon, Newline, Comma, Dot, LeftBraces, RightBraces, Colon
+    LeftParen, RightParen, LeftBracket, RightBracket, Semicolon, Newline, Comma, Dot,
+    LeftBraces, RightBraces, Colon,
+};
+
+// ResolvedType is an enum of types Neoluma compiler internally supports by default.
+enum class ResolvedType {
+    Int8, Int16, Int, Int64, Int128,
+    UInt8, UInt16, UInt, UInt64, UInt128,
+    Float, Float64,
+    Number, Bool, Str,
+    Array, Dict, Set, Result,
+    Void, UserDefined, Unknown
 };
 
 // Mapping entries
-
 struct EKeyword { std::string name; Keywords token; };
 struct EOperator { std::string name; Operators token; };
 struct EDecorator { std::string name; Decorators token; };
 struct EPreprocessor { std::string name; Preprocessors token; };
 struct EDelimeter { std::string name; Delimeters token; };
+struct EResolvedType { ResolvedType type; std::string name; };
 
-/// this is what it costs us parser no-hardcode proofness btw
 const std::unordered_map<std::string, Keywords>& getKeywordMap();
 const std::unordered_map<std::string, Operators>& getOperatorMap();
 const std::unordered_map<std::string, Decorators>& getDecoratorMap();
 const std::unordered_map<std::string, Preprocessors>& getPreprocessorMap();
 const std::unordered_map<std::string, Delimeters>& getDelimeterMap();
-
-const std::unordered_map<Keywords, std::string>& getKeywordNames();
-const std::unordered_map<Operators, std::string>& getOperatorNames();
-const std::unordered_map<Decorators, std::string>& getDecoratorNames();
-const std::unordered_map<Preprocessors, std::string>& getPreprocessorNames();
-const std::unordered_map<Delimeters, std::string>& getDelimeterNames();
+const std::unordered_map<std::string, ResolvedType>& getTypeMap();

@@ -1,0 +1,4 @@
+@entry
+fn main() {
+    missing = 1
+}

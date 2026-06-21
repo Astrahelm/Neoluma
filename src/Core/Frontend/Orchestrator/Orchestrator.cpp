@@ -96,35 +96,34 @@ std::string Orchestrator::resolveRelativeKey(const std::string& currentKey, cons
 }
 
 // Main implementations
-ProgramUnit Orchestrator::stitchProgram(const EntryPoint& entryPoint, const std::vector<ModuleInfo>& infos){
-    ProgramUnit program;
-    program.entryFn = entryPoint.function;
-
+void Orchestrator::stitchProgram(Program& program) {
     ModuleId entryId = -1;
-    for (const auto& info : infos) {
-        if (info.module == entryPoint.module) {
+
+    for (const auto& info : program.moduleInfos) {
+        if (info.module == program.entryPoint.module) {
             entryId = info.id;
             break;
         }
     }
 
-    program.entryModule = entryId;
-    if (entryId < 0) return program; // i mean this should not ever ever happen but if anything just return the program...
+    if (entryId < 0) return; // i mean this should not ever ever happen but...
 
-    std::vector<uint8_t> state(infos.size(), 0);
-    dfsVisit(entryId, infos, state, program.order, nullptr);
+    program.order.clear(); // clean up previous order just in case
 
-    return program;
+    std::vector<uint8_t> state(program.moduleInfos.size(), 0);
+    dfsVisit(entryId, program.moduleInfos, state, program.order, nullptr);
 }
 
 EntryPoint Orchestrator::findEntryPoint(const std::vector<MemoryPtr<ModuleNode>>& modules) {
     EntryPoint entryPoint{};
     EntryPoint mainFallback{};
+    ModuleNode* firstModule = nullptr;
 
     bool foundExplicit = false;
 
     for (const auto& module : modules) {
         if (!module) continue;
+        if (!firstModule) firstModule = module.get();
         for (const auto& statement : module->body) {
             if (!statement || statement->type != ASTNodeType::Function) continue;
 
@@ -159,14 +158,15 @@ EntryPoint Orchestrator::findEntryPoint(const std::vector<MemoryPtr<ModuleNode>>
     compiler->errorManager.addError(
             ErrorType::Analysis,
             AnalysisErrors::NoEntryPoints,
-            ErrorSpan{modules.front()->filePath, "", 1, 1},
+            ErrorSpan{firstModule ? firstModule->filePath : "", "", 1, 1},
             "ErrorManager.Analysis.NoEntryPoints.message", {},
                "ErrorManager.Analysis.NoEntryPoints.hint");
 
     return {};
 }
 
-std::vector<ModuleInfo> Orchestrator::resolveImports(const std::vector<MemoryPtr<ModuleNode>>& modules){
+std::vector<ModuleInfo> Orchestrator::resolveImports(Program& program){
+    const auto& modules = program.modules;
     std::vector<ModuleInfo> infos(modules.size());
 
     // key to module id
@@ -178,13 +178,29 @@ std::vector<ModuleInfo> Orchestrator::resolveImports(const std::vector<MemoryPtr
         ModuleNode* m = modules[i].get();
         if (!m) continue;
 
-        std::string key = compiler->projectManager.filePathToKey(m->filePath);
+        std::string key = std::filesystem::path(m->filePath).replace_extension().lexically_normal().generic_string();
         idToKey[i] = key;
         keyToId[key] = i;
 
         infos[i].id = i;
         infos[i].module = m;
     }
+
+    auto registerAlias = [&](ModuleInfo& mi, ImportNode* imp, ModuleId depId) {
+        if (imp->alias.empty()) return;
+
+        if (mi.aliasMap.count(imp->alias)) {
+            compiler->errorManager.addError(
+                ErrorType::Preprocessor,
+                PreprocessorErrors::ImportAliasConflict,
+                ErrorSpan{imp->filePath, imp->alias, imp->line, imp->column},
+                "ErrorManager.Preprocessor.ImportAliasConflict.message", {imp->alias},
+                "ErrorManager.Preprocessor.ImportAliasConflict.hint");
+            return;
+        }
+
+        mi.aliasMap.emplace(imp->alias, depId);
+    };
 
     // go through imports and fill out dependencies and aliasMap
     for (ModuleId i = 0; i < (ModuleId)infos.size(); ++i)
@@ -199,6 +215,12 @@ std::vector<ModuleInfo> Orchestrator::resolveImports(const std::vector<MemoryPtr
 
             auto* imp = static_cast<ImportNode*>(st.get());
             const std::string& name = imp->moduleName;
+
+            if (program.namespaces.contains(name)) {
+                mi.namespaceImports.push_back(name);
+                if (!imp->alias.empty()) mi.namespaceAliasMap.emplace(imp->alias, name);
+                continue;
+            }
 
             if (imp->importType == ASTImportType::Relative){
                 std::string resolvedKey = resolveRelativeKey(idToKey[mi.id], imp->moduleName);
@@ -215,20 +237,7 @@ std::vector<ModuleInfo> Orchestrator::resolveImports(const std::vector<MemoryPtr
 
                 ModuleId depId = it->second;
                 mi.dependencies.push_back(DependencyEdge{depId, ErrorSpan{imp->filePath, imp->moduleName, imp->line, imp->column}});
-
-                // for aliases
-                if (!imp->alias.empty())
-                {
-                    if (mi.aliasMap.count(imp->alias))
-                        compiler->errorManager.addError(
-                        ErrorType::Preprocessor,
-                        PreprocessorErrors::ImportAliasConflict,
-                        ErrorSpan{imp->filePath, imp->alias, imp->line, imp->column},
-                         "ErrorManager.Preprocessor.ImportAliasConflict.message", {imp->alias},
-                        "ErrorManager.Preprocessor.ImportAliasConflict.hint");
-
-                    else mi.aliasMap.emplace(imp->alias, depId);
-                }
+                registerAlias(mi, imp, depId);
             }
             else if (imp->importType == ASTImportType::Native){
                 // At first we're gonna assume the file is in the same folder, if not, it's really a native import
@@ -239,10 +248,12 @@ std::vector<ModuleInfo> Orchestrator::resolveImports(const std::vector<MemoryPtr
                 auto it = keyToId.find(resolvedKey);
                 if (it != keyToId.end()){
                     // is a relative import
-                    mi.dependencies.push_back(DependencyEdge{it->second, ErrorSpan{imp->filePath, imp->moduleName, imp->line, imp->column}});
+                    ModuleId depId = it->second;
+                    mi.dependencies.push_back(DependencyEdge{depId, ErrorSpan{imp->filePath, imp->moduleName, imp->line, imp->column}});
+                    registerAlias(mi, imp, depId);
                 } else {
                     // is a native import
-                    if (imp->moduleName != "std" && !compiler->projectManager.config.dependencies.contains(imp->moduleName)){
+                    if (imp->moduleName != "std" && !compiler->program.input.dependencies.contains(imp->moduleName)){
                         compiler->errorManager.addError(
                         ErrorType::Preprocessor,
                         PreprocessorErrors::ImportNotFound,
@@ -259,4 +270,25 @@ std::vector<ModuleInfo> Orchestrator::resolveImports(const std::vector<MemoryPtr
     }
 
     return infos;
+}
+
+std::unordered_map<std::string, NamespaceInfo> Orchestrator::collectNamespaces(const std::vector<MemoryPtr<ModuleNode>>& modules) {
+    std::unordered_map<std::string, NamespaceInfo> namespaces;
+
+    for (const auto& module : modules) {
+        if (!module) continue;
+
+        for (const auto& statement : module->body) {
+            if (!statement || statement->type != ASTNodeType::Namespace) continue;
+
+            auto* node = static_cast<NamespaceNode*>(statement.get());
+            const std::string& name = node->value;
+
+            if (!namespaces.contains(name)) namespaces.emplace(name, NamespaceInfo{name, {}});
+
+            namespaces[name].declarations.push_back(node);
+        }
+    }
+
+    return namespaces;
 }

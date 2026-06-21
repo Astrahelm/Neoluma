@@ -1,0 +1,5 @@
+namespace std.iter {
+    intrinsic fn range(stop: int) -> int[];
+    intrinsic fn range(start: int, stop: int) -> int[];
+    intrinsic fn range(start: int, stop: int, step: int) -> int[];
+}

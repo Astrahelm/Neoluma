@@ -2,5 +2,257 @@
     "hint": "💡  Подсказка: {}",
     "errorsFound": "Найдено {} ошибок!",
     // safetyGuard запускается только из Parser.
-    "safetyGuard": "❌😵‍💫 Сработала защита восстановления! Останавливаем парсер для избежания вечного цикла. Если каким-то образом вы видите это сообщение, доложите об этом разработчикам. \n\n Информация: \n Функция: {},\n Файл {},\n Случилось в строке {}:{}\n\nСпасибо!\n"
+    "safetyGuard": "❌😵‍💫 Сработала защита восстановления! Останавливаем парсер для избежания вечного цикла. Если каким-то образом вы видите это сообщение, доложите об этом разработчикам. \n\n Информация: \n Функция: {},\n Файл {},\n Случилось в строке {}:{}\n\nСпасибо!\n",
+    "Syntax": {
+        "UnexpectedToken.message": "Неизвестный токен: '{}'",
+        "UnexpectedToken.hint": "Удалите его, или убедитесь что ввели его верно",
+
+        "MissingToken": {
+            "message": "Missing '{}'",
+            "hint": "Add '{}' here.",
+
+            "noVariableAfter.message": "Missing expression after '{}'",
+            "noVariableAfter.hint": "Provide a value or variable after '{}'.",
+
+            "missingOperandUnary.message": "Missing operand after unary operator '{}'",
+            "missingOperandUnary.hint": "Add an operand after '{}'. For example: !x, -x.",
+
+            "missingExpressionLambda.message": "Missing expression after '{}' in lambda",
+            "missingExpressionLambda.hint": "Provide an expression inside the parentheses.",
+
+            "dictColonAfterKey.message": "Missing ':' after dictionary key '{}'",
+            "dictColonAfterKey.hint": "Add a colon after the key. For example: {{ key: value }}.",
+
+            "closingParen.message": "Missing closing ')' after '{}'",
+            "closingParen.hint": "Close the parenthesis after '{}'.",
+
+            "openingParen.message": "Missing '(' after '{}'",
+            "openingParen.hint": "Add '(' after '{}'.",
+
+            "closingBrace.message": "Missing closing '}}' after '{}'",
+            "closingBrace.hint": "Close the block with '}}'.",
+
+            "openingBrace.message": "Missing '{{' to start '{}' body",
+            "openingBrace.hint": "Add '{{' to open the block.",
+
+            "closingBracket.message": "Missing ']' after size in type definition",
+            "closingBracket.hint": "Close the bracket after the size value.",
+
+            "colonAfterVar.message": "Missing ':' after variable name '{}'",
+            "colonAfterVar.hint": "Add ':' after the variable name to declare its type. For example: x: int.",
+
+            "colonInFor.message": "Missing ':' after variable '{}' in for loop",
+            "colonInFor.hint": "Write the for loop like this: for (item: myList) {{ ... }}.",
+
+            "colonInCase.message": "Missing ':' after 'case' condition",
+            "colonInCase.hint": "Add ':' after the case condition. For example: case 1: ...",
+
+            "colonInDefault.message": "Missing ':' after 'default'",
+            "colonInDefault.hint": "Add ':' after 'default'. For example: default: ...",
+
+            "colonInInterface.message": "Missing ':' after field name '{}' in interface",
+            "colonInInterface.hint": "Add ':' and the field type. For example: name: str.",
+
+            "catchAfterTry.message": "Missing 'catch' block after 'try'",
+            "catchAfterTry.hint": "Add a catch block. For example: catch (e) {{ ... }}.",
+
+            "exceptionVar.message": "Missing exception variable name after 'catch'",
+            "exceptionVar.hint": "Provide a variable name in catch. For example: catch (e) {{ ... }}.",
+
+            "importTarget.message": "Missing import path after '#import'",
+            "importTarget.hint": "Provide a string path after #import. For example: #import \"myModule\".",
+
+            "importAlias.message": "Missing identifier after 'as' in import",
+            "importAlias.hint": "Provide an alias name. For example: #import \"myModule\" as mod.",
+
+            "macroIdentifier.message": "Missing identifier after '#macro'",
+            "macroIdentifier.hint": "Provide a name for the macro. For example: #macro MY_MACRO.",
+
+            "functionName.message": "Missing function name after 'fn'",
+            "functionName.hint": "Provide a name for the function. For example: fn myFunction() {{ ... }}.",
+
+            "functionParams.message": "Missing '(' after function name '{}'",
+            "functionParams.hint": "Add parentheses after the function name. For example: fn {}() {{ ... }}.",
+
+            "functionParamName.message": "Missing parameter name in function '{}'",
+            "functionParamName.hint": "Provide a name for each parameter. For example: fn foo(x: int) {{ ... }}.",
+
+            "functionParamDefault.message": "Missing default value after '=' in parameter",
+            "functionParamDefault.hint": "Provide a value after '='. For example: fn foo(x: int = 0) {{ ... }}.",
+
+            "functionClosingParen.message": "Missing ')' after parameters in function '{}'",
+            "functionClosingParen.hint": "Close the parameter list with ')'.",
+
+            "functionBody.message": "Missing body for function '{}'",
+            "functionBody.hint": "Add a block body after the function signature. For example: fn {}() {{ ... }}.",
+
+            "className.message": "Missing class name after 'class'",
+            "className.hint": "Provide a name for the class. For example: class MyClass {{ ... }}.",
+
+            "classBody.message": "Missing '{{' to start class '{}' body",
+            "classBody.hint": "Add '{{' to open the class body.",
+
+            "enumName.message": "Missing enum name after 'enum'",
+            "enumName.hint": "Provide a name for the enum. For example: enum Color {{ Red, Green, Blue }}.",
+
+            "enumBody.message": "Missing '{{' after enum name '{}'",
+            "enumBody.hint": "Add '{{' to open the enum body.",
+
+            "enumClosingBrace.message": "Missing '}}' at end of enum '{}'",
+            "enumClosingBrace.hint": "Close the enum body with '}}'.",
+
+            "interfaceName.message": "Missing interface name after 'interface'",
+            "interfaceName.hint": "Provide a name for the interface. For example: interface IMyInterface {{ ... }}.",
+
+            "interfaceBody.message": "Missing '{{' after interface name '{}'",
+            "interfaceBody.hint": "Add '{{' to open the interface body.",
+
+            "interfaceClosingBrace.message": "Missing '}}' at end of interface '{}'",
+            "interfaceClosingBrace.hint": "Close the interface body with '}}'.",
+
+            "interfaceMethodName.message": "Missing method name after 'fn' in interface '{}'",
+            "interfaceMethodName.hint": "Provide a name for the method. For example: fn myMethod().",
+
+            "interfaceMethodParams.message": "Missing '(' after method name '{}' in interface",
+            "interfaceMethodParams.hint": "Add parentheses after the method name.",
+
+            "interfaceMethodParamName.message": "Missing parameter name in interface method '{}'",
+            "interfaceMethodParamName.hint": "Provide a name for each parameter.",
+
+            "interfaceMethodClosingParen.message": "Missing ')' after parameters in interface method '{}'",
+            "interfaceMethodClosingParen.hint": "Close the parameter list with ')'.",
+
+            "interfaceReturnType.message": "Missing return type after '->' in interface method '{}'",
+            "interfaceReturnType.hint": "Provide a return type after '->'. For example: fn foo() -> int.",
+
+            "decoratorName.message": "Missing decorator name after '@'",
+            "decoratorName.hint": "Provide a name after '@'. For example: @myDecorator.",
+
+            "decoratorParamName.message": "Missing parameter name in decorator '{}'",
+            "decoratorParamName.hint": "Provide a name for each parameter.",
+
+            "decoratorParamDefault.message": "Missing default value after '=' in decorator parameter",
+            "decoratorParamDefault.hint": "Provide a value after '='. For example: @myDecorator(x = 0).",
+
+            "decoratorClosingParen.message": "Unterminated parameter list in decorator '{}'",
+            "decoratorClosingParen.hint": "Close the parameter list with ')'.",
+
+            "decoratorBody.message": "Missing body for decorator '{}'",
+            "decoratorBody.hint": "Add a block body after the decorator signature."
+        },
+
+        "InvalidStatement": {
+            "message": "Invalid statement",
+            "hint": "This cannot be used here.",
+
+            "missedBlock.message": "Expected a block body after '{}'",
+            "missedBlock.hint": "Add '{{ }}' after '{}'. For example: {} {{ ... }}.",
+
+            "emptyCondition.message": "Empty condition in '{}'",
+            "emptyCondition.hint": "Provide a condition inside the parentheses. For example: {} (x > 0) {{ ... }}.",
+
+            "expectedCondition.message": "Failed to parse condition in '{}'",
+            "expectedCondition.hint": "Make sure the condition is a valid expression. For example: {} (x > 0) {{ ... }}.",
+
+            "expectedBody.message": "Missing body after '{}' statement",
+            "expectedBody.hint": "Add a block body. For example: {} {{ ... }}.",
+
+            "expectedIterable.message": "Missing iterable expression in 'for' loop",
+            "expectedIterable.hint": "Provide something to iterate over. For example: for (item: myList) {{ ... }}.",
+
+            "unexpectedInClass.message": "Unexpected token '{}' inside class body",
+            "unexpectedInClass.hint": "Class bodies can only contain fields, methods, and a constructor.",
+
+            "unexpectedInSwitch.message": "Unexpected token '{}' inside switch — expected 'case' or 'default'",
+            "unexpectedInSwitch.hint": "Switch bodies can only contain 'case' and 'default' blocks.",
+
+            "unexpectedInEnum.message": "Unexpected token '{}' inside enum — expected an identifier",
+            "unexpectedInEnum.hint": "Enum members must be identifiers. For example: enum Color {{ Red, Green, Blue }}.",
+
+            "unexpectedInInterface.message": "Unexpected token '{}' inside interface body",
+            "unexpectedInInterface.hint": "Interface bodies can only contain field and method declarations.",
+
+            "enumDelimiter.message": "Unexpected token '{}' between enum members",
+            "enumDelimiter.hint": "Separate enum members with commas or newlines.",
+
+            "interfaceDelimiter.message": "Unexpected token '{}' between interface members",
+            "interfaceDelimiter.hint": "Separate interface members with newlines.",
+
+            "noType.message": "Missing type — expected a type name here",
+            "noType.hint": "Provide a type name. For example: x: int.",
+
+            "constructorFailed.message": "Failed to parse constructor in class '{}'",
+            "constructorFailed.hint": "Make sure the constructor matches the class name and has a valid body.",
+
+            "enumNonLiteralValue.message": "Enum member '{}' must have a literal value",
+            "enumNonLiteralValue.hint": "Use a number or string literal. For example: enum Color {{ Red = 0, Green = 1 }}."
+        },
+
+        "InvalidNumberFormat.message": "Invalid number format: '{}'",
+        "InvalidNumberFormat.hint": "Numbers can only be written with integer, floating point and exponent. Example: 1.23e-6",
+
+        "UnterminatedComment.message": "Unterminated comment",
+        "UnterminatedComment.hint": "Close the comment with '*/'.",
+
+        "UnterminatedString.message": "Unterminated string"
+    },
+    "Analysis": {
+        "MultipleEntryPoints.message": "Multiple entry points detected",
+        "MultipleEntryPoints.hint": "Keep only one function marked with @entry. First one detected at {}:{}:{}.",
+
+        "NoEntryPoints.message": "No entry points found",
+        "NoEntryPoints.hint": "Add @entry to a function or define fn main().",
+
+        "RedefinedVariable.message": "Redefined Variable: '{}'",
+        "RedefinedVariable.hint": "You can't declare the same variable twice in terms of parent scope.",
+
+        "DuplicateParameterName.message": "Duplicate parameter '{}' at '{}' function",
+        "DuplicateParameterName.hint": "Rename or remove the parameter.",
+
+        "UnknownType.message": "Unknown type '{}' of '{}'",
+        "UnknownType.hint": "Make sure the type is defined or imported correctly.",
+
+        "UndefinedVariable.message": "Неизвестная переменная '{}'",
+        "UndefinedVariable.hint": "Убедитесь, что переменная объявлена или импортирована корректно.",
+
+        "ConstantReassignment.message": "Constant reassignment has been attempted: '{}'",
+        "ConstantReassignment.hint": "If a variable is constant, it cannot be reassigned. Fix the code.",
+
+        "UndefinedDecorator.message": "Undefined decorator '{}'",
+        "UndefinedDecorator.hint": "Make sure the decorator is defined or imported correctly.",
+
+        "UndefinedFunction.message": "Неизвестная функция '{}'",
+        "UndefinedFunction.hint": "Убедитесь, что функция объявлена или импортирована корректно.",
+
+        "FunctionMismatch.message": "Function mismatch: '{}'",
+        "FunctionMismatch.hint" : "Make sure you typed in the arguments correctly.",
+
+        "ReturnOutsideFunction.message": "Detected return outside of function",
+        "ReturnOutsideFunction.hint": "Yes, you can't use return outside a function. No, it will not return your ex",
+
+        "BreakOutsideLoop.message": "Detected break outside of loop",
+        "BreakOutsideLoop.hint": "I am not sure if you're trying to break the 4th wall, but... you can't.\nThis statement only works inside a loop, so move it there or remove it.",
+
+        "ContinueOutsideLoop.message": "Detected continue outside of loop",
+        "ContinueOutsideLoop.hint": "Continue what? Your code =.=? This statement only works inside a loop, so move it there or remove it.",
+
+        "DuplicateEnumMember.message": "Duplicate enum element '{}' found in '{}'.",
+        "DuplicateEnumMember.hint": "Remove or rename it."
+    },
+    "Preprocessor": {
+        "ImportNotFound.message": "Import not found: '{}'",
+        "ImportNotFound.hint": "Check the path or create a module file at that location.",
+
+        "ImportNotFound.nativePackageNotInstalled.message": "Native package '{}' is not installed",
+        "ImportNotFound.nativePackageNotInstalled.hint": "Add it to project dependencies (.nlp) or install the package.",
+
+        "ImportAliasConflict.message": "Import alias conflict: '{}'",
+        "ImportAliasConflict.hint": "Use a different alias name.",
+
+        "InvalidDirective.message": "Invalid directive: '{}'",
+        "InvalidDirective.hint": "Check the Neoluma documentation to see what directives are available.",
+
+        "CircularImport.message": "Circular import detected",
+        "CircularImport.hint": "Remove the cycle or refactor shared code into a separate module."
+    }
 }

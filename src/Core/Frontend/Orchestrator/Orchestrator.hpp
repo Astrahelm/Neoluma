@@ -1,11 +1,12 @@
 #pragma once
 #include "../Nodes.hpp"
-#include "Core/Frontend/ErrorManager/ErrorManager.hpp"
+#include "Core/Extras/ErrorManager/ErrorManager.hpp"
 #include <unordered_map>
 
 // helper declarations
 using ModuleId = int;
 struct Compiler;
+struct Program;
 
 struct EntryPoint {
     ModuleNode* module = nullptr;
@@ -25,15 +26,15 @@ struct ModuleInfo {
     std::vector<DependencyEdge> dependencies;
     std::unordered_map<std::string, ModuleId> aliasMap;
     std::vector<std::string> nativeImports; // for packages that import from dependencies or std, like "math", "std", "tazer"
+
+    std::vector<std::string> namespaceImports;
+    std::unordered_map<std::string, std::string> namespaceAliasMap;
 };
 
-struct ProgramUnit {
-    ModuleId entryModule = -1; // From what module do we start the program execution?
-    FunctionNode* entryFn = nullptr; // What function is used to be an entry one?
-    std::vector<ModuleId> order; // Dependency-first order list (for Semantic Analysis)
+struct NamespaceInfo {
+    std::string name;
+    std::vector<NamespaceNode*> declarations;
 };
-
-// TODO: namespaces support
 
 // Orchestrator is a struct that allows us to stitch the project together into a working program, that can be fed to the Semantic Analysis and lower parts of the Compiler.
 struct Orchestrator {
@@ -41,9 +42,10 @@ struct Orchestrator {
     void setCompiler(Compiler* comp) { compiler = comp; }
 
     // main function
-    ProgramUnit stitchProgram(const EntryPoint& entryPoint, const std::vector<ModuleInfo>& infos);
+    void stitchProgram(Program& program);
     EntryPoint findEntryPoint(const std::vector<MemoryPtr<ModuleNode>>& modules);
-    std::vector<ModuleInfo> resolveImports(const std::vector<MemoryPtr<ModuleNode>>& modules);
+    std::vector<ModuleInfo> resolveImports(Program& program);
+    std::unordered_map<std::string, NamespaceInfo> collectNamespaces(const std::vector<MemoryPtr<ModuleNode>>& modules);
 
     // helper functions
     static bool hasEntryDecorator(const FunctionNode* function);

@@ -1,0 +1,24 @@
+namespace std.math {
+    intrinsic fn abs(value: int) -> int;
+    intrinsic fn abs(value: float) -> float;
+
+    intrinsic fn min(a: int, b: int) -> int;
+    intrinsic fn max(a: int, b: int) -> int;
+
+    intrinsic fn min(a: float, b: float) -> float;
+    intrinsic fn max(a: float, b: float) -> float;
+
+    intrinsic fn clamp(value: int, min: int, max: int) -> int;
+    intrinsic fn clamp(value: float, min: float, max: float) -> float;
+
+    intrinsic fn sqrt(value: float) -> float;
+    intrinsic fn pow(value: float, power: float) -> float;
+
+    intrinsic fn floor(value: float) -> float;
+    intrinsic fn ceil(value: float) -> float;
+    intrinsic fn round(value: float) -> float;
+
+    intrinsic fn sin(value: float) -> float;
+    intrinsic fn cos(value: float) -> float;
+    intrinsic fn tan(value: float) -> float;
+}

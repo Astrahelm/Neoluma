@@ -1,0 +1,8 @@
+{
+  "status": "error",
+  "stage": "semantic",
+  "error_code": "NAnE32",
+  "line": 3,
+  "column": 5,
+  "message_key": "ErrorManager.Analysis.ContinueOutsideLoop.message"
+}

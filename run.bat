@@ -1,0 +1,1 @@
+.\.build\.runtime\Debug\bin\neoluma.exe check --project "TestProject/testproject.nlp"

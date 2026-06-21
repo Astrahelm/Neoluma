@@ -1,0 +1,4 @@
+@entry
+fn main() {
+    values: set = {1, 2
+}

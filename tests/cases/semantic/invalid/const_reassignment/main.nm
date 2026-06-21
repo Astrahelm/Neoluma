@@ -1,0 +1,5 @@
+@entry
+fn main() {
+    const value: int = 1
+    value = 2
+}

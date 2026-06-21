@@ -1,0 +1,4 @@
+@entry
+fn main() {
+    values: dict = {"a": 1, "b"
+}

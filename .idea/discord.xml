@@ -2,14 +2,8 @@
 <project version="4">
   <component name="DiscordProjectSettings">
     <option name="show" value="PROJECT_FILES" />
+    <option name="nameOverrideEnabled" value="true" />
     <option name="nameOverrideText" value="Neoluma" />
     <option name="description" value="A programming language" />
-    <option name="applicationTheme" value="2024-icons" />
-    <option name="iconsTheme" value="default" />
-    <option name="button1Title" value="Check out" />
-    <option name="button1Url" value="https://neoluma.dev" />
-    <option name="button2Title" value="" />
-    <option name="button2Url" value="" />
-    <option name="customApplicationId" value="1441482598496075879" />
   </component>
 </project>

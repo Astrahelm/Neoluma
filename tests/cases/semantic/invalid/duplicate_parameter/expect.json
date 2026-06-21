@@ -1,0 +1,8 @@
+{
+  "status": "error",
+  "stage": "semantic",
+  "error_code": "NAnE11",
+  "line": 2,
+  "column": 21,
+  "message_key": "ErrorManager.Analysis.DuplicateParameterName.message"
+}

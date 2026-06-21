@@ -1,6 +1,6 @@
 #include <iostream>
 #include <print>
-#include <typeinfo>
+#include <algorithm>
 
 #include "Core/Compiler.hpp"
 #include "Libraries/Color/Color.hpp"
@@ -8,6 +8,7 @@
 
 #include "../Nodes.hpp"
 #include "Parser.hpp"
+
 #include "../Token.hpp"
 #include "../../../HelperFunctions.hpp"
 #include "ASTBuilder.hpp"
@@ -29,14 +30,13 @@ void Parser::parseModule(const std::vector<Token>& tok, const std::string& name)
 
     auto moduleNode = ASTBuilder::createModule(moduleName);
     moduleNode->line = 0; moduleNode->column = 0; moduleNode->filePath = curToken().filePath;
-    auto dn = getDelimeterNames();
 
     // FIXME: Reevaluate why the fuck this duct tape method exists. Remake safety guards, since i don't remember it's purpose
     while (!isAtEnd()) {
-        if (curToken().type == TokenType::Delimeter && curToken().value == dn[Delimeters::Semicolon]) { next(); continue; }
+        if (match(Delimeters::Semicolon)) { next(); continue; }
 
         MemoryPtr<ASTNode> stmt = parseStatement();
-        if (!stmt && match(TokenType::Delimeter, dn[Delimeters::RightBraces])) { next(); continue; }
+        if (!stmt && match(Delimeters::RightBraces)) { next(); continue; }
         if (!stmt) {
             while (!isAtEnd() && !isNextLine()) next();
 
@@ -47,7 +47,7 @@ void Parser::parseModule(const std::vector<Token>& tok, const std::string& name)
                     next();
                     break;
                 }
-                if (match(TokenType::Delimeter, dn[Delimeters::RightBraces])){
+                if (match(Delimeters::RightBraces)){
                     break;
                 }
                 next();
@@ -71,36 +71,33 @@ void Parser::parseModule(const std::vector<Token>& tok, const std::string& name)
 // ==== Statement parsing ====
 MemoryPtr<ASTNode> Parser::parseStatement() {
     while (isNextLine()) next(); // Skips newlines in case they ever appear
+    if (isAtEnd()) return nullptr;
 
     Token token = curToken();
-    auto km = getKeywordMap();
-    auto dm = getDelimeterMap();
-    auto dn = getDelimeterNames();
-    auto om = getOperatorMap();
-
     std::vector<MemoryPtr<CallExpressionNode>> decorators = {};
 
     if (match(TokenType::Preprocessor)) return parsePreprocessor();
     if (match(TokenType::Decorator)) decorators = parseDecoratorCalls();
+    while (isNextLine()) next();
 
     auto modifiers = parseModifiers();
 
-    if (match(TokenType::Identifier) && (om[lookupNext().value] == Operators::Nullable || dm[lookupNext().value] == Delimeters::Colon))
+    if (match(TokenType::Identifier) && (match(lookupNext(), Operators::Nullable) || match(lookupNext(), Delimeters::Colon)))
         return parseDeclaration(std::move(decorators), std::move(modifiers));
 
     token = curToken();
     // === Control Flow Keywords ===
-    if (token.type == TokenType::Keyword) {
-        if (km[token.value] == Keywords::If) return parseIf();
-        if (km[token.value] == Keywords::Switch) return parseSwitch();
-        if (km[token.value] == Keywords::Try) return parseTryCatch();
-        if (km[token.value] == Keywords::For) return parseFor();
-        if (km[token.value] == Keywords::While) return parseWhile();
-        if (km[token.value] == Keywords::Return) {
+    if (match(TokenType::Keyword)) {
+        if (match(token, Keywords::If)) return parseIf();
+        if (match(token, Keywords::Switch)) return parseSwitch();
+        if (match(token, Keywords::Try)) return parseTryCatch();
+        if (match(token, Keywords::For)) return parseFor();
+        if (match(token, Keywords::While)) return parseWhile();
+        if (match(token, Keywords::Return)) {
             next();
 
             // allow "return;" or "return }"
-            if (isNextLine() || match(TokenType::Delimeter, dn[Delimeters::RightBraces])) {
+            if (isNextLine() || match(Delimeters::RightBraces)) {
                 if (isNextLine()) next();
                 auto node = ASTBuilder::createReturnStatement(nullptr);
                 node->line = token.line; node->column = token.column; node->filePath = token.filePath;
@@ -109,7 +106,7 @@ MemoryPtr<ASTNode> Parser::parseStatement() {
 
             auto expr = parseExpression();
             if (!expr) {
-                compiler->errorManager.addError(
+                errorManager->addError(
                     ErrorType::Syntax, SyntaxErrors::MissingToken,
                     ErrorSpan{lookBack().filePath, lookBack().value, lookBack().line, lookBack().column},
                     "ErrorManager.Syntax.MissingToken.noVariableAfter.message", {"return"},
@@ -123,10 +120,10 @@ MemoryPtr<ASTNode> Parser::parseStatement() {
             node->line = token.line; node->column = token.column; node->filePath = token.filePath;
             return node;
         }
-        if (km[token.value] == Keywords::Throw) {
+        if ((match(token, Keywords::Throw))) {
             next();
-            if (isNextLine() || match(TokenType::Delimeter, dn[Delimeters::RightBraces])) {
-                compiler->errorManager.addError(
+            if (isNextLine() || match(Delimeters::RightBraces)) {
+                errorManager->addError(
                     ErrorType::Syntax, SyntaxErrors::MissingToken,
                     ErrorSpan{token.filePath, token.value, token.line, token.column},
                     "ErrorManager.Syntax.MissingToken.noVariableAfter.message", {"throw"},
@@ -143,13 +140,13 @@ MemoryPtr<ASTNode> Parser::parseStatement() {
             node->line = token.line; node->column = token.column; node->filePath = token.filePath;
             return node;
         }
-        if (km[token.value] == Keywords::Break) {
+        if (match(token, Keywords::Break)) {
             next();
             auto node = ASTBuilder::createBreakStatement();
             node->line = token.line; node->column = token.column; node->filePath = token.filePath;
             return node;
         }
-        if (km[token.value] == Keywords::Continue) {
+        if (match(token, Keywords::Continue)) {
             next();
             auto node = ASTBuilder::createContinueStatement();
             node->line = token.line; node->column = token.column; node->filePath = token.filePath;
@@ -157,19 +154,26 @@ MemoryPtr<ASTNode> Parser::parseStatement() {
         }
 
         // for modifier affected structures
-        if (km[token.value] == Keywords::Function) return parseFunction(std::move(decorators), std::move(modifiers));
-        if (km[token.value] == Keywords::Class) return parseClass(std::move(decorators), std::move(modifiers));
-        if (km[token.value] == Keywords::Enum) return parseEnum(std::move(decorators), std::move(modifiers));
-        if (km[token.value] == Keywords::Interface) return parseInterface(std::move(decorators), std::move(modifiers));
-        if (km[token.value] == Keywords::Decorator) return parseDecorator(std::move(decorators), std::move(modifiers));
+        if (match(token, Keywords::Function)) return parseFunction(std::move(decorators), std::move(modifiers));
+        if (match(token, Keywords::Class)) return parseClass(std::move(decorators), std::move(modifiers));
+        if (match(token, Keywords::Enum)) return parseEnum(std::move(decorators), std::move(modifiers));
+        if (match(token,  Keywords::Interface)) return parseInterface(std::move(decorators), std::move(modifiers));
+        if (match(token, Keywords::Decorator)) return parseDecorator(std::move(decorators), std::move(modifiers));
         // FIXME: why is this here?
         if (!modifiers.empty()) {
-            std::println(std::cerr, "[Neoluma/Parser][{}] Unexpected modifier before {} (L{}:{})", __func__, token.value, token.line, token.column);
+            errorManager->addError(
+                ErrorType::Syntax, SyntaxErrors::UnexpectedToken,
+                ErrorSpan{token.filePath, token.value, token.line, token.column},
+                "ErrorManager.Syntax.UnexpectedToken.message", {token.value},
+                "ErrorManager.Syntax.UnexpectedToken.hint");
+            return nullptr;
         }
+
+        if (match(token, Keywords::Namespace)) return parseNamespace();
     }
 
     // === Block ===
-    if (match(TokenType::Delimeter, dn[Delimeters::LeftBraces])) {
+    if (match(Delimeters::LeftBraces)) {
         return parseBlock();
     }
 
@@ -181,13 +185,10 @@ MemoryPtr<ASTNode> Parser::parseStatement() {
 // Note: does not require next(); after it
 MemoryPtr<ASTNode> Parser::parseExpression() {
     Token token = curToken();
-    auto om = getOperatorMap();
-    auto dm = getDelimeterMap();
 
     // Unary operations
     if (om.find(token.value) != om.end()) {
-        Operators op = om[token.value];
-        if (op == Operators::LogicalNot || op == Operators::Subtract) {
+        if (match(token, Operators::LogicalNot) || match(token, Operators::Subtract)) {
             next();
             return parseUnary(token.value);
         }
@@ -227,7 +228,7 @@ MemoryPtr<ASTNode> Parser::parseBinary(int prevPredecence) {
 MemoryPtr<UnaryOperationNode> Parser::parseUnary(const std::string& op) {
     MemoryPtr<ASTNode> operand = parsePrimary();
     if (!operand) {
-        compiler->errorManager.addError(
+        errorManager->addError(
             ErrorType::Syntax, SyntaxErrors::MissingToken,
             ErrorSpan{lookBack().filePath, lookBack().value, lookBack().line, lookBack().column},
             "ErrorManager.Syntax.MissingToken.missingOperandUnary.message", {op},
@@ -239,19 +240,17 @@ MemoryPtr<UnaryOperationNode> Parser::parseUnary(const std::string& op) {
 
 MemoryPtr<ASTNode> Parser::parsePrimary() {
     Token token = curToken();
-    auto dn = getDelimeterNames();
-    auto on = getOperatorNames();
 
     // Parenthesis, lambdas, arrays, sets, dicts
-    if (token.type == TokenType::Delimeter) {
+    if (match(TokenType::Delimeter)) {
         // Parenthesis / lambdas
-        if (token.value == dn[Delimeters::LeftParen]) {
+        if (match(Delimeters::LeftParen)) {
             next();
             std::vector<MemoryPtr<ASTNode>> exprs;
-            while (!match(TokenType::Delimeter, dn[Delimeters::RightParen])) {
+            while (!match(Delimeters::RightParen)) {
                 MemoryPtr<ASTNode> expr = parseExpression();
                 if (!expr) {
-                    compiler->errorManager.addError(
+                    errorManager->addError(
                         ErrorType::Syntax, SyntaxErrors::MissingToken,
                         ErrorSpan{token.filePath, token.value, token.line, token.column},
                         "ErrorManager.Syntax.MissingToken.missingExpressionLambda.message", {"("},
@@ -260,11 +259,11 @@ MemoryPtr<ASTNode> Parser::parsePrimary() {
                 }
                 exprs.push_back(std::move(expr));
                 if (curToken().type == TokenType::Delimeter && isNextLine()) next();
-                if (match(TokenType::Delimeter, dn[Delimeters::Comma])) next();
+                if (match(Delimeters::Comma)) next();
                 else break;
             }
-            if (!match(TokenType::Delimeter, dn[Delimeters::RightParen])) {
-                compiler->errorManager.addError(
+            if (!match(Delimeters::RightParen)) {
+                errorManager->addError(
                     ErrorType::Syntax, SyntaxErrors::MissingToken,
                     ErrorSpan{token.filePath, token.value, token.line, token.column},
                     "ErrorManager.Syntax.MissingToken.closingParen.message", {"("},
@@ -273,11 +272,11 @@ MemoryPtr<ASTNode> Parser::parsePrimary() {
             }
             next();
             // Check for lambda expressions here
-            if (match(TokenType::Operator, on[Operators::AssignmentArrow])) {
+            if (match(Operators::AssignmentArrow)) {
                 next();
                 auto block = parseBlock();
                 if (!block) {
-                    compiler->errorManager.addError(
+                    errorManager->addError(
                         ErrorType::Syntax, SyntaxErrors::InvalidStatement,
                         ErrorSpan{curToken().filePath, curToken().value, curToken().line, curToken().column},
                         "ErrorManager.Syntax.InvalidStatement.missedBlock.message", {"=>"},
@@ -286,38 +285,69 @@ MemoryPtr<ASTNode> Parser::parsePrimary() {
                 }
                 return ASTBuilder::createLambda(std::move(exprs), std::move(block));
             }
-            // todo: change to a more safe option to move
-            return std::move(exprs.front());
+
+            if (exprs.size() == 1) return std::move(exprs.front());
+            return ASTBuilder::createTuple(std::move(exprs));
         }
         // Arrays
-        if (token.value == dn[Delimeters::LeftBracket]) {
-            if (lookBack().type == TokenType::Identifier && (lookupNext().type == TokenType::Delimeter && lookupNext().value == dn[Delimeters::RightBracket])) next();
+        if (match(Delimeters::LeftBracket)) {
+            if (match(lookBack(), TokenType::Identifier) && (match(lookupNext(), TokenType::Delimeter) && match(lookupNext(), Delimeters::RightBracket))) next();
             else {
                 // TODO: implement the strict types for arrays, sets, dicts?
                 next();
                 std::vector<MemoryPtr<ASTNode>> e;
 
-                while (!match(TokenType::Delimeter, dn[Delimeters::RightBracket])) {
-                    e.push_back(parseExpression());
+                while (!match(Delimeters::RightBracket)) {
+                    if (isAtEnd()) {
+                        errorManager->addError(
+                            ErrorType::Syntax, SyntaxErrors::MissingToken,
+                            ErrorSpan{token.filePath, token.value, token.line, token.column},
+                            "ErrorManager.Syntax.MissingToken.closingBracket.message", {},
+                            "ErrorManager.Syntax.MissingToken.closingBracket.hint");
+                        return nullptr;
+                    }
+
+                    auto element = parseExpression();
+                    if (!element) return nullptr;
+
+                    e.push_back(std::move(element));
                     if (curToken().type == TokenType::Delimeter && isNextLine()) next(); // To allow multiline expressions of arrays. I think this would be absolutely neat sugar for everybody.
-                    if (match(TokenType::Delimeter, dn[Delimeters::Comma])) next();
+                    if (match(Delimeters::Comma)) next();
+                    else if (!match(Delimeters::RightBracket)) {
+                        errorManager->addError(
+                            ErrorType::Syntax, SyntaxErrors::MissingToken,
+                            ErrorSpan{curToken().filePath, curToken().value, curToken().line, curToken().column},
+                            "ErrorManager.Syntax.MissingToken.closingBracket.message", {},
+                            "ErrorManager.Syntax.MissingToken.closingBracket.hint");
+                        return nullptr;
+                    }
                 }
                 next();
                 return ASTBuilder::createArray(std::move(e));
             }
         }
         // Sets / dicts
-        if (token.value == dn[Delimeters::LeftBraces]) {
+        if (match(Delimeters::LeftBraces)) {
             // TODO next time: Allow dicts and sets to dictate their explicit type (when you come back)
             next();
-            bool isDict = (lookupNext().type == TokenType::Delimeter && lookupNext().value == dn[Delimeters::Colon]);
+            bool isDict = (match(lookupNext(), TokenType::Delimeter) && match(lookupNext(), Delimeters::Colon));
 
             if (isDict) {
                 std::vector<std::pair<MemoryPtr<ASTNode>, MemoryPtr<ASTNode>>> e;
-                while (!match(TokenType::Delimeter, dn[Delimeters::RightBraces])) {
+                while (!match(Delimeters::RightBraces)) {
+                    if (isAtEnd()) {
+                        errorManager->addError(
+                            ErrorType::Syntax, SyntaxErrors::MissingToken,
+                            ErrorSpan{token.filePath, token.value, token.line, token.column},
+                            "ErrorManager.Syntax.MissingToken.closingBrace.message", {"dict"},
+                            "ErrorManager.Syntax.MissingToken.closingBrace.hint");
+                        return nullptr;
+                    }
+
                     auto key = parseExpression();
-                    if (!match(TokenType::Delimeter, dn[Delimeters::Colon])) {
-                        compiler->errorManager.addError(
+                    if (!key) return nullptr;
+                    if (!match(Delimeters::Colon)) {
+                        errorManager->addError(
                             ErrorType::Syntax, SyntaxErrors::MissingToken,
                             ErrorSpan{curToken().filePath, curToken().value, curToken().line, curToken().column},
                             "ErrorManager.Syntax.MissingToken.dictColonAfterKey.message", {key->value},
@@ -326,55 +356,82 @@ MemoryPtr<ASTNode> Parser::parsePrimary() {
                     }
                     next();
                     auto val = parseExpression();
+                    if (!val) return nullptr;
                     e.push_back({std::move(key), std::move(val)});
-                    if (match(TokenType::Delimeter, dn[Delimeters::Comma])) next();
-                    else break;
+                    if (match(Delimeters::Comma)) next();
+                    else if (!match(Delimeters::RightBraces)) {
+                        errorManager->addError(
+                            ErrorType::Syntax, SyntaxErrors::MissingToken,
+                            ErrorSpan{curToken().filePath, curToken().value, curToken().line, curToken().column},
+                            "ErrorManager.Syntax.MissingToken.closingBrace.message", {"dict"},
+                            "ErrorManager.Syntax.MissingToken.closingBrace.hint");
+                        return nullptr;
+                    }
                 }
                 next();
                 return ASTBuilder::createDict(std::move(e));
             }
 
             std::vector<MemoryPtr<ASTNode>> e;
-            while (!match(TokenType::Delimeter, dn[Delimeters::RightBraces])) {
-                e.push_back(parseExpression());
-                if (match(TokenType::Delimeter, dn[Delimeters::Comma])) next();
-                else break;
+            while (!match(Delimeters::RightBraces)) {
+                if (isAtEnd()) {
+                    errorManager->addError(
+                        ErrorType::Syntax, SyntaxErrors::MissingToken,
+                        ErrorSpan{token.filePath, token.value, token.line, token.column},
+                        "ErrorManager.Syntax.MissingToken.closingBrace.message", {"set"},
+                        "ErrorManager.Syntax.MissingToken.closingBrace.hint");
+                    return nullptr;
+                }
+
+                auto element = parseExpression();
+                if (!element) return nullptr;
+
+                e.push_back(std::move(element));
+                if (match(Delimeters::Comma)) next();
+                else if (!match(Delimeters::RightBraces)) {
+                    errorManager->addError(
+                        ErrorType::Syntax, SyntaxErrors::MissingToken,
+                        ErrorSpan{curToken().filePath, curToken().value, curToken().line, curToken().column},
+                        "ErrorManager.Syntax.MissingToken.closingBrace.message", {"set"},
+                        "ErrorManager.Syntax.MissingToken.closingBrace.hint");
+                    return nullptr;
+                }
             }
             next();
             return ASTBuilder::createSet(std::move(e));
         }
     }
     // Data type + Booleans
-    else if ((token.type == TokenType::Number || token.type == TokenType::String)
-    || (token.type == TokenType::Identifier && (token.value == "true" || token.value == "false"))) {
+    else if ((match(TokenType::Number) || match(TokenType::String))
+    || (match(TokenType::Identifier) && (token.value == "true" || token.value == "false"))) {
         next();
         return ASTBuilder::createLiteral(token.value);
     }
     // Null
-    else if (token.type == TokenType::Null) {
+    else if (match(TokenType::Null)) {
         next();
         return ASTBuilder::createLiteral("null");
     }
 
     // Identifier/variable or function call
-    else if (token.type == TokenType::Identifier) {
+    else if (match(TokenType::Identifier)) {
         Token id = next();
         MemoryPtr<ASTNode> node;
 
         // If function call
-        if (match(TokenType::Delimeter, dn[Delimeters::LeftParen])) {
+        if (match(Delimeters::LeftParen)) {
             next();
             std::vector<MemoryPtr<ASTNode>> args;
 
-            while (!match(TokenType::Delimeter, dn[Delimeters::RightParen])) {
+            while (!match(Delimeters::RightParen)) {
                 auto arg = parseExpression();
                 if (arg) args.push_back(std::move(arg));
 
-                if (match(TokenType::Delimeter, dn[Delimeters::Comma])) next();
+                if (match(Delimeters::Comma)) next();
                 else break;
             }
-            if (!match(TokenType::Delimeter, dn[Delimeters::RightParen])) {
-                compiler->errorManager.addError(
+            if (!match(Delimeters::RightParen)) {
+                errorManager->addError(
                     ErrorType::Syntax, SyntaxErrors::MissingToken,
                     ErrorSpan{token.filePath, token.value, token.line, token.column},
                     "ErrorManager.Syntax.MissingToken.closingParen.message", {token.value},
@@ -390,19 +447,26 @@ MemoryPtr<ASTNode> Parser::parsePrimary() {
             node = ASTBuilder::createVariable(id.value);
         }
 
-        while (match(TokenType::Delimeter, dn[Delimeters::Dot])) {
+        while (match(Delimeters::Dot)) {
             next();
             MemoryPtr<ASTNode> parent = std::move(node);
 
             if (!match(TokenType::Identifier)) {
-                // [internal] member access expects identifier — this is a parser invariant, not a user error we can localize cleanly
-                std::println(std::cerr, "[Neoluma/Parser][{}] Expected identifier after '.' (L{}:{})", __func__, token.line, token.column);
+                errorManager->addError(
+                    ErrorType::Syntax, SyntaxErrors::UnexpectedToken,
+                    ErrorSpan{curToken().filePath, curToken().value, curToken().line, curToken().column},
+                    "ErrorManager.Syntax.UnexpectedToken.message", {curToken().value},
+                    "ErrorManager.Syntax.UnexpectedToken.hint");
                 return nullptr;
             }
             MemoryPtr<ASTNode> member = parsePrimary();
+            if (!member) return nullptr;
             if (member->type != ASTNodeType::Variable && member->type != ASTNodeType::CallExpression) {
-                // [internal]
-                std::println(std::cerr, "[Neoluma/Parser][{}] Expected variable or function call after '.' (L{}:{})", __func__, token.line, token.column);
+                errorManager->addError(
+                    ErrorType::Syntax, SyntaxErrors::InvalidStatement,
+                    ErrorSpan{member->filePath, member->value, member->line, member->column},
+                    "ErrorManager.Syntax.InvalidStatement.message", {},
+                    "ErrorManager.Syntax.InvalidStatement.hint");
                 return nullptr;
             }
             node = ASTBuilder::createMemberAccess(std::move(parent), std::move(member));
@@ -411,7 +475,7 @@ MemoryPtr<ASTNode> Parser::parsePrimary() {
         return node;
     }
 
-    compiler->errorManager.addError(
+    errorManager->addError(
         ErrorType::Syntax, SyntaxErrors::UnexpectedToken,
         ErrorSpan{token.filePath, token.value, token.line, token.column},
         "ErrorManager.Syntax.UnexpectedToken.message", {token.value},
@@ -419,56 +483,146 @@ MemoryPtr<ASTNode> Parser::parsePrimary() {
     return nullptr;
 }
 
-MemoryPtr<RawTypeNode> Parser::parseType() {
-    auto dn = getDelimeterNames();
+std::optional<std::vector<GenericParameter>> Parser::parseGenericParameters(const std::string& ownerName) {
+    std::vector<GenericParameter> parameters;
 
-    if (!match(TokenType::Identifier)){
-        compiler->errorManager.addError(
-            ErrorType::Syntax, SyntaxErrors::MissingToken,
+    if (!match(Operators::LessThan)) return parameters;
+
+    Token openToken = curToken();
+    next();
+
+    if (match(Operators::GreaterThan)) {
+        errorManager->addError(ErrorType::Syntax, SyntaxErrors::MissingToken,
+            ErrorSpan{openToken.filePath, openToken.value, openToken.line, openToken.column},
+            "ErrorManager.Syntax.MissingToken.genericParameter.message",
+            {ownerName},
+            "ErrorManager.Syntax.MissingToken.genericParameter.hint");
+        return std::nullopt;
+    }
+
+    while (!isAtEnd()) {
+        Token nameToken = curToken();
+
+        if (!match(TokenType::Identifier)) {
+            errorManager->addError(ErrorType::Syntax, SyntaxErrors::MissingToken,
+                ErrorSpan{nameToken.filePath, nameToken.value, nameToken.line, nameToken.column},
+                "ErrorManager.Syntax.MissingToken.genericParameter.message",
+                {ownerName},
+                "ErrorManager.Syntax.MissingToken.genericParameter.hint");
+            return std::nullopt;
+        }
+
+        for (const auto& parameter : parameters) {
+            if (parameter.name == nameToken.value) {
+                errorManager->addError(ErrorType::Syntax, SyntaxErrors::InvalidStatement,
+                    ErrorSpan{nameToken.filePath, nameToken.value, nameToken.line, nameToken.column},
+                    "ErrorManager.Syntax.InvalidStatement.duplicateGenericParameter.message",
+                    {nameToken.value, ownerName},
+                    "ErrorManager.Syntax.InvalidStatement.duplicateGenericParameter.hint");
+                return std::nullopt;
+            }
+        }
+
+        parameters.push_back(GenericParameter{
+            .name = nameToken.value,
+            .line = nameToken.line,
+            .column = nameToken.column,
+            .filePath = nameToken.filePath
+        });
+
+        next();
+
+        if (match(Delimeters::Comma)) {
+            next();
+
+            if (match(Operators::GreaterThan)) {
+                errorManager->addError(ErrorType::Syntax, SyntaxErrors::MissingToken,
+                    ErrorSpan{curToken().filePath, curToken().value, curToken().line, curToken().column},
+                    "ErrorManager.Syntax.MissingToken.genericParameter.message",
+                    {ownerName},
+                    "ErrorManager.Syntax.MissingToken.genericParameter.hint");
+                return std::nullopt;
+            }
+            continue;
+        }
+        break;
+    }
+
+    if (!match(Operators::GreaterThan)) {
+        errorManager->addError(ErrorType::Syntax, SyntaxErrors::MissingToken,
             ErrorSpan{curToken().filePath, curToken().value, curToken().line, curToken().column},
+            "ErrorManager.Syntax.MissingToken.genericClosingAngle.message",
+            {ownerName},
+            "ErrorManager.Syntax.MissingToken.genericClosingAngle.hint");
+        return std::nullopt;
+    }
+    next();
+
+    return parameters;
+}
+
+MemoryPtr<RawTypeNode> Parser::parseType() {
+    Token typeToken = curToken();
+
+    if (!match(TokenType::Identifier)) {
+        errorManager->addError(ErrorType::Syntax, SyntaxErrors::MissingToken,
+            ErrorSpan{typeToken.filePath, typeToken.value, typeToken.line, typeToken.column},
             "ErrorManager.Syntax.InvalidStatement.noType.message", {},
             "ErrorManager.Syntax.InvalidStatement.noType.hint");
         return nullptr;
     }
-    MemoryPtr<VariableNode> varType = ASTBuilder::createVariable(curToken().value);
+
+    std::string typeName = typeToken.value;
+    MemoryPtr<VariableNode> varType = ASTBuilder::createVariable(typeName);
     next();
 
+    auto result = parseGenericArguments(typeName);
+    if (!result) return nullptr;
+
+    std::vector<MemoryPtr<RawTypeNode>> genericArguments = std::move(*result);
+
     MemoryPtr<ASTNode> varSize = nullptr;
-    if (match(TokenType::Delimeter, dn[Delimeters::LeftBracket])){
+    if (match(Delimeters::LeftBracket)) {
         next();
-        if (match(TokenType::Identifier) || match(TokenType::Number)) varSize = parseExpression();
-        if (!match(TokenType::Delimeter, dn[Delimeters::RightBracket]))
-        {
-            compiler->errorManager.addError(
-                ErrorType::Syntax, SyntaxErrors::MissingToken,
+
+        if (!match(Delimeters::RightBracket)) {
+            varSize = parseExpression();
+            if (!varSize) {
+                errorManager->addError(ErrorType::Syntax, SyntaxErrors::MissingToken,
+                    ErrorSpan{curToken().filePath, curToken().value, curToken().line, curToken().column},
+                    "ErrorManager.Syntax.MissingToken.arraySize.message", {typeName},
+                    "ErrorManager.Syntax.MissingToken.arraySize.hint");
+                return nullptr;
+            }
+        }
+
+        if (!match(Delimeters::RightBracket)) {
+            errorManager->addError(ErrorType::Syntax, SyntaxErrors::MissingToken,
                 ErrorSpan{curToken().filePath, curToken().value, curToken().line, curToken().column},
                 "ErrorManager.Syntax.MissingToken.closingBracket.message", {},
                 "ErrorManager.Syntax.MissingToken.closingBracket.hint");
             return nullptr;
         }
+
         next();
     }
 
-    return ASTBuilder::createRawType(std::move(varType), std::move(varSize));
+    auto node = ASTBuilder::createRawType(std::move(varType), std::move(varSize), std::move(genericArguments));
+    node->line = typeToken.line; node->column = typeToken.column; node->filePath = typeToken.filePath;
+    return node;
 }
 
-MemoryPtr<DeclarationNode> Parser::parseDeclaration(std::vector<MemoryPtr<CallExpressionNode>> decorators, std::vector<MemoryPtr<ModifierNode>> modifiers)
-{
-    auto om = getOperatorMap();
-    auto on = getOperatorNames();
-    auto dn = getDelimeterNames();
-
+MemoryPtr<DeclarationNode> Parser::parseDeclaration(std::vector<MemoryPtr<CallExpressionNode>> decorators, std::vector<MemoryPtr<ModifierNode>> modifiers){
     Token token = curToken();
     MemoryPtr<VariableNode> var = ASTBuilder::createVariable(token.value);
     next();
 
     bool isNullable = false;
-    if (match(TokenType::Operator, on[Operators::Nullable])) { isNullable = true; next(); }
+    if (match(Operators::Nullable)) { isNullable = true; next(); }
 
-    // TODO for later: Allow generics in code like array<int> and others. It allows using explicit types for sets, dicts and etc.
     MemoryPtr<RawTypeNode> rawType = nullptr;
-    if (!match(TokenType::Delimeter, dn[Delimeters::Colon])) {
-        compiler->errorManager.addError(
+    if (!match(Delimeters::Colon)) {
+        errorManager->addError(
             ErrorType::Syntax, SyntaxErrors::MissingToken,
             ErrorSpan{token.filePath, token.value, token.line, token.column},
             "ErrorManager.Syntax.MissingToken.colonAfterVar.message", {token.value},
@@ -479,12 +633,12 @@ MemoryPtr<DeclarationNode> Parser::parseDeclaration(std::vector<MemoryPtr<CallEx
 
     bool isTypeInference = false;
     MemoryPtr<ASTNode> value = nullptr;
-    if (match(TokenType::Operator, on[Operators::Assign])) {
+    if (match(Operators::Assign)) {
         isTypeInference = true;
         next();
         value = parseExpression();
         if (!value) {
-            compiler->errorManager.addError(
+            errorManager->addError(
                 ErrorType::Syntax, SyntaxErrors::MissingToken,
                 ErrorSpan{token.filePath, token.value, token.line, token.column},
                 "ErrorManager.Syntax.MissingToken.noVariableAfter.message", {"="},
@@ -493,11 +647,11 @@ MemoryPtr<DeclarationNode> Parser::parseDeclaration(std::vector<MemoryPtr<CallEx
         }
     } else {
         rawType = parseType();
-        if (match(TokenType::Operator, on[Operators::Assign])){
+        if (match(Operators::Assign)){
             next();
             value = parseExpression();
             if (!value) {
-                compiler->errorManager.addError(
+                errorManager->addError(
                     ErrorType::Syntax, SyntaxErrors::MissingToken,
                     ErrorSpan{token.filePath, token.value, token.line, token.column},
                     "ErrorManager.Syntax.MissingToken.noVariableAfter.message", {"="},
@@ -513,18 +667,15 @@ MemoryPtr<DeclarationNode> Parser::parseDeclaration(std::vector<MemoryPtr<CallEx
 }
 
 MemoryPtr<AssignmentNode> Parser::parseAssignment() {
-    auto om = getOperatorMap();
-    auto on = getOperatorNames();
 
     MemoryPtr<ASTNode> var = parsePrimary();
-    if (!var) {
-        // [internal]
-        std::println(std::cerr, "[Neoluma/Parser][{}] Failed to parse left-hand side of assignment (L{}:{})", __func__, curToken().line, curToken().column);
-        return nullptr;
-    }
+    if (!var) return nullptr;
     if (var->type != ASTNodeType::Variable && var->type != ASTNodeType::MemberAccess) {
-        // [internal]
-        std::println(std::cerr, "[Neoluma/Parser][{}] Left-hand side of assignment must be a variable or member access (L{}:{})", __func__, curToken().line, curToken().column);
+        errorManager->addError(
+            ErrorType::Syntax, SyntaxErrors::InvalidStatement,
+            ErrorSpan{var->filePath, var->value, var->line, var->column},
+            "ErrorManager.Syntax.InvalidStatement.message", {},
+            "ErrorManager.Syntax.InvalidStatement.hint");
         return nullptr;
     }
 
@@ -534,7 +685,7 @@ MemoryPtr<AssignmentNode> Parser::parseAssignment() {
 
     MemoryPtr<ASTNode> value = parseExpression();
     if (!value) {
-        compiler->errorManager.addError(
+        errorManager->addError(
             ErrorType::Syntax, SyntaxErrors::MissingToken,
             ErrorSpan{token.filePath, token.value, token.line, token.column},
             "ErrorManager.Syntax.MissingToken.noVariableAfter.message", {op},
@@ -551,10 +702,9 @@ MemoryPtr<AssignmentNode> Parser::parseAssignment() {
 MemoryPtr<IfNode> Parser::parseIf() {
     auto token = curToken();
     next();
-    auto dm = getDelimeterNames();
 
-    if (!match(TokenType::Delimeter, dm[Delimeters::LeftParen])) {
-        compiler->errorManager.addError(
+    if (!match(Delimeters::LeftParen)) {
+        errorManager->addError(
             ErrorType::Syntax, SyntaxErrors::MissingToken,
             ErrorSpan{token.filePath, token.value, token.line, token.column},
             "ErrorManager.Syntax.MissingToken.openingParen.message", {"if"},
@@ -562,8 +712,8 @@ MemoryPtr<IfNode> Parser::parseIf() {
         return nullptr;
     }
     next(); // consume '('
-    if (match(TokenType::Delimeter, dm[Delimeters::RightParen])) {
-        compiler->errorManager.addError(
+    if (match(Delimeters::RightParen)) {
+        errorManager->addError(
             ErrorType::Syntax, SyntaxErrors::InvalidStatement,
             ErrorSpan{curToken().filePath, curToken().value, curToken().line, curToken().column},
             "ErrorManager.Syntax.InvalidStatement.emptyCondition.message", {"if"},
@@ -574,15 +724,15 @@ MemoryPtr<IfNode> Parser::parseIf() {
 
     MemoryPtr<ASTNode> condition = parseExpression();
     if (!condition) {
-        compiler->errorManager.addError(
+        errorManager->addError(
             ErrorType::Syntax, SyntaxErrors::InvalidStatement,
             ErrorSpan{curToken().filePath, curToken().value, curToken().line, curToken().column},
             "ErrorManager.Syntax.InvalidStatement.expectedCondition.message", {"if"},
             "ErrorManager.Syntax.InvalidStatement.expectedCondition.hint", {"if"});
         return nullptr;
     }
-    if (!match(TokenType::Delimeter, dm[Delimeters::RightParen])) {
-        compiler->errorManager.addError(
+    if (!match(Delimeters::RightParen)) {
+        errorManager->addError(
             ErrorType::Syntax, SyntaxErrors::MissingToken,
             ErrorSpan{curToken().filePath, curToken().value, curToken().line, curToken().column},
             "ErrorManager.Syntax.MissingToken.closingParen.message", {"if"},
@@ -594,8 +744,7 @@ MemoryPtr<IfNode> Parser::parseIf() {
     MemoryPtr<ASTNode> ifBlock = parseBlockorStatement();
     MemoryPtr<ASTNode> elseBlock = nullptr;
 
-    auto km = getKeywordNames();
-    if (match(TokenType::Keyword, km[Keywords::Else])) {
+    if (match(Keywords::Else)) {
         next();
         elseBlock = parseBlockorStatement();
     }
@@ -608,11 +757,9 @@ MemoryPtr<IfNode> Parser::parseIf() {
 MemoryPtr<SwitchNode> Parser::parseSwitch() {
     auto token = curToken();
     next();
-    auto dm = getDelimeterNames();
-    auto km = getKeywordNames();
 
-    if (!match(TokenType::Delimeter, dm[Delimeters::LeftParen])) {
-        compiler->errorManager.addError(
+    if (!match(Delimeters::LeftParen)) {
+        errorManager->addError(
             ErrorType::Syntax, SyntaxErrors::MissingToken,
             ErrorSpan{token.filePath, token.value, token.line, token.column},
             "ErrorManager.Syntax.MissingToken.openingParen.message", {"switch"},
@@ -623,7 +770,7 @@ MemoryPtr<SwitchNode> Parser::parseSwitch() {
 
     MemoryPtr<ASTNode> expr = parseExpression();
     if (!expr) {
-        compiler->errorManager.addError(
+        errorManager->addError(
             ErrorType::Syntax, SyntaxErrors::InvalidStatement,
             ErrorSpan{curToken().filePath, curToken().value, curToken().line, curToken().column},
             "ErrorManager.Syntax.InvalidStatement.expectedCondition.message", {"switch"},
@@ -631,8 +778,8 @@ MemoryPtr<SwitchNode> Parser::parseSwitch() {
         return nullptr;
     }
 
-    if (!match(TokenType::Delimeter, dm[Delimeters::RightParen])) {
-        compiler->errorManager.addError(
+    if (!match(Delimeters::RightParen)) {
+        errorManager->addError(
             ErrorType::Syntax, SyntaxErrors::MissingToken,
             ErrorSpan{curToken().filePath, curToken().value, curToken().line, curToken().column},
             "ErrorManager.Syntax.MissingToken.closingParen.message", {"switch"},
@@ -641,8 +788,8 @@ MemoryPtr<SwitchNode> Parser::parseSwitch() {
     }
     next();
 
-    if (!match(TokenType::Delimeter, dm[Delimeters::LeftBraces])) {
-        compiler->errorManager.addError(
+    if (!match(Delimeters::LeftBraces)) {
+        errorManager->addError(
             ErrorType::Syntax, SyntaxErrors::MissingToken,
             ErrorSpan{curToken().filePath, curToken().value, curToken().line, curToken().column},
             "ErrorManager.Syntax.MissingToken.openingBrace.message", {"switch"},
@@ -650,19 +797,19 @@ MemoryPtr<SwitchNode> Parser::parseSwitch() {
         return nullptr;
     }
     next();
-    while (match(TokenType::Delimeter, dm[Delimeters::Semicolon])) next();
+    while (match(Delimeters::Semicolon)) next();
 
     std::vector<MemoryPtr<CaseNode>> cases;
     MemoryPtr<SCDefaultNode> defaultCase = nullptr;
 
-    while (!match(TokenType::Delimeter, dm[Delimeters::RightBraces])) {
+    while (!match(Delimeters::RightBraces)) {
         Token tok = curToken();
 
-        if (match(TokenType::Keyword, km[Keywords::Case])) {
+        if (match(Keywords::Case)) {
             next(); // consume 'case'
             MemoryPtr<ASTNode> condition = parseExpression();
-            if (!match(TokenType::Delimeter, dm[Delimeters::Colon])) {
-                compiler->errorManager.addError(
+            if (!match(Delimeters::Colon)) {
+                errorManager->addError(
                     ErrorType::Syntax, SyntaxErrors::MissingToken,
                     ErrorSpan{curToken().filePath, curToken().value, curToken().line, curToken().column},
                     "ErrorManager.Syntax.MissingToken.colonInCase.message", {},
@@ -672,20 +819,20 @@ MemoryPtr<SwitchNode> Parser::parseSwitch() {
             next(); // consume ':'
             auto body = parseBlockorStatement();
             if (!body) {
-                compiler->errorManager.addError(
+                errorManager->addError(
                     ErrorType::Syntax, SyntaxErrors::InvalidStatement,
                     ErrorSpan{curToken().filePath, curToken().value, curToken().line, curToken().column},
                     "ErrorManager.Syntax.InvalidStatement.expectedBody.message", {"case"},
                     "ErrorManager.Syntax.InvalidStatement.expectedBody.hint", {"case"});
                 return nullptr;
             }
-            while (match(TokenType::Delimeter, dm[Delimeters::Semicolon])) next();
+            while (match(Delimeters::Semicolon)) next();
             cases.push_back(ASTBuilder::createCase(std::move(condition), std::move(body)));
         }
-        else if (match(TokenType::Keyword, km[Keywords::Default])) {
+        else if (match(Keywords::Default)) {
             next();
-            if (!match(TokenType::Delimeter, dm[Delimeters::Colon])) {
-                compiler->errorManager.addError(
+            if (!match(Delimeters::Colon)) {
+                errorManager->addError(
                     ErrorType::Syntax, SyntaxErrors::MissingToken,
                     ErrorSpan{curToken().filePath, curToken().value, curToken().line, curToken().column},
                     "ErrorManager.Syntax.MissingToken.colonInDefault.message", {},
@@ -695,19 +842,19 @@ MemoryPtr<SwitchNode> Parser::parseSwitch() {
             next();
             auto body = parseBlockorStatement();
             if (!body) {
-                compiler->errorManager.addError(
+                errorManager->addError(
                     ErrorType::Syntax, SyntaxErrors::InvalidStatement,
                     ErrorSpan{curToken().filePath, curToken().value, curToken().line, curToken().column},
                     "ErrorManager.Syntax.InvalidStatement.expectedBody.message", {"default"},
                     "ErrorManager.Syntax.InvalidStatement.expectedBody.hint", {"default"});
                 return nullptr;
             }
-            while (match(TokenType::Delimeter, dm[Delimeters::Semicolon])) next();
+            while (match(Delimeters::Semicolon)) next();
             defaultCase = ASTBuilder::createDefaultCase(std::move(body));
         }
         else if (isNextLine()) next();
         else {
-            compiler->errorManager.addError(
+            errorManager->addError(
                 ErrorType::Syntax, SyntaxErrors::UnexpectedToken,
                 ErrorSpan{tok.filePath, tok.value, tok.line, tok.column},
                 "ErrorManager.Syntax.InvalidStatement.unexpectedInSwitch.message", {tok.value},
@@ -715,8 +862,8 @@ MemoryPtr<SwitchNode> Parser::parseSwitch() {
             return nullptr;
         }
     }
-    if (!match(TokenType::Delimeter, dm[Delimeters::RightBraces])) {
-        compiler->errorManager.addError(
+    if (!match(Delimeters::RightBraces)) {
+        errorManager->addError(
             ErrorType::Syntax, SyntaxErrors::MissingToken,
             ErrorSpan{curToken().filePath, curToken().value, curToken().line, curToken().column},
             "ErrorManager.Syntax.MissingToken.closingBrace.message", {"switch"},
@@ -732,12 +879,10 @@ MemoryPtr<SwitchNode> Parser::parseSwitch() {
 MemoryPtr<TryCatchNode> Parser::parseTryCatch() {
     auto token = curToken();
     next();
-    auto km = getKeywordNames();
-    auto dn = getDelimeterNames();
 
     auto tryBlock = parseBlock();
     if (!tryBlock) {
-        compiler->errorManager.addError(
+        errorManager->addError(
             ErrorType::Syntax, SyntaxErrors::InvalidStatement,
             ErrorSpan{curToken().filePath, curToken().value, curToken().line, curToken().column},
             "ErrorManager.Syntax.InvalidStatement.expectedBody.message", {"try"},
@@ -745,8 +890,8 @@ MemoryPtr<TryCatchNode> Parser::parseTryCatch() {
         return nullptr;
     }
 
-    if (!match(TokenType::Keyword, km[Keywords::Catch])) {
-        compiler->errorManager.addError(
+    if (!match(Keywords::Catch)) {
+        errorManager->addError(
             ErrorType::Syntax, SyntaxErrors::MissingToken,
             ErrorSpan{curToken().filePath, curToken().value, curToken().line, curToken().column},
             "ErrorManager.Syntax.MissingToken.catchAfterTry.message", {},
@@ -755,8 +900,8 @@ MemoryPtr<TryCatchNode> Parser::parseTryCatch() {
     }
     next();
 
-    if (!match(TokenType::Delimeter, dn[Delimeters::LeftParen])) {
-        compiler->errorManager.addError(
+    if (!match(Delimeters::LeftParen)) {
+        errorManager->addError(
             ErrorType::Syntax, SyntaxErrors::MissingToken,
             ErrorSpan{curToken().filePath, curToken().value, curToken().line, curToken().column},
             "ErrorManager.Syntax.MissingToken.openingParen.message", {"catch"},
@@ -766,7 +911,7 @@ MemoryPtr<TryCatchNode> Parser::parseTryCatch() {
     next();
 
     if (!match(TokenType::Identifier)) {
-        compiler->errorManager.addError(
+        errorManager->addError(
             ErrorType::Syntax, SyntaxErrors::MissingToken,
             ErrorSpan{curToken().filePath, curToken().value, curToken().line, curToken().column},
             "ErrorManager.Syntax.MissingToken.exceptionVar.message", {},
@@ -777,8 +922,8 @@ MemoryPtr<TryCatchNode> Parser::parseTryCatch() {
     auto exception = ASTBuilder::createVariable(varName);
     next();
 
-    if (!match(TokenType::Delimeter, dn[Delimeters::RightParen])) {
-        compiler->errorManager.addError(
+    if (!match(Delimeters::RightParen)) {
+        errorManager->addError(
             ErrorType::Syntax, SyntaxErrors::MissingToken,
             ErrorSpan{curToken().filePath, curToken().value, curToken().line, curToken().column},
             "ErrorManager.Syntax.MissingToken.closingParen.message", {"catch"},
@@ -789,7 +934,7 @@ MemoryPtr<TryCatchNode> Parser::parseTryCatch() {
 
     auto catchBlock = parseBlock();
     if (!catchBlock) {
-        compiler->errorManager.addError(
+        errorManager->addError(
             ErrorType::Syntax, SyntaxErrors::InvalidStatement,
             ErrorSpan{curToken().filePath, curToken().value, curToken().line, curToken().column},
             "ErrorManager.Syntax.InvalidStatement.expectedBody.message", {"catch"},
@@ -805,10 +950,9 @@ MemoryPtr<TryCatchNode> Parser::parseTryCatch() {
 MemoryPtr<ForLoopNode> Parser::parseFor() {
     auto token = curToken();
     next();
-    auto dm = getDelimeterNames();
 
-    if (!match(TokenType::Delimeter, dm[Delimeters::LeftParen])) {
-        compiler->errorManager.addError(
+    if (!match(Delimeters::LeftParen)) {
+        errorManager->addError(
             ErrorType::Syntax, SyntaxErrors::MissingToken,
             ErrorSpan{token.filePath, token.value, token.line, token.column},
             "ErrorManager.Syntax.MissingToken.openingParen.message", {"for"},
@@ -818,7 +962,7 @@ MemoryPtr<ForLoopNode> Parser::parseFor() {
     next();
 
     if (curToken().type != TokenType::Identifier) {
-        compiler->errorManager.addError(
+        errorManager->addError(
             ErrorType::Syntax, SyntaxErrors::MissingToken,
             ErrorSpan{curToken().filePath, curToken().value, curToken().line, curToken().column},
             "ErrorManager.Syntax.MissingToken.noVariableAfter.message", {"for ("},
@@ -830,8 +974,8 @@ MemoryPtr<ForLoopNode> Parser::parseFor() {
     auto varNode = ASTBuilder::createVariable(varName);
     next();
 
-    if (!match(TokenType::Delimeter, dm[Delimeters::Colon])) {
-        compiler->errorManager.addError(
+    if (!match(Delimeters::Colon)) {
+        errorManager->addError(
             ErrorType::Syntax, SyntaxErrors::MissingToken,
             ErrorSpan{curToken().filePath, curToken().value, curToken().line, curToken().column},
             "ErrorManager.Syntax.MissingToken.colonInFor.message", {varName},
@@ -842,7 +986,7 @@ MemoryPtr<ForLoopNode> Parser::parseFor() {
 
     MemoryPtr<ASTNode> iterable = parseExpression();
     if (!iterable) {
-        compiler->errorManager.addError(
+        errorManager->addError(
             ErrorType::Syntax, SyntaxErrors::InvalidStatement,
             ErrorSpan{curToken().filePath, curToken().value, curToken().line, curToken().column},
             "ErrorManager.Syntax.InvalidStatement.expectedIterable.message", {},
@@ -850,8 +994,8 @@ MemoryPtr<ForLoopNode> Parser::parseFor() {
         return nullptr;
     }
 
-    if (!match(TokenType::Delimeter, dm[Delimeters::RightParen])) {
-        compiler->errorManager.addError(
+    if (!match(Delimeters::RightParen)) {
+        errorManager->addError(
             ErrorType::Syntax, SyntaxErrors::MissingToken,
             ErrorSpan{curToken().filePath, curToken().value, curToken().line, curToken().column},
             "ErrorManager.Syntax.MissingToken.closingParen.message", {"for"},
@@ -862,7 +1006,7 @@ MemoryPtr<ForLoopNode> Parser::parseFor() {
 
     auto body = parseBlock();
     if (!body) {
-        compiler->errorManager.addError(
+        errorManager->addError(
             ErrorType::Syntax, SyntaxErrors::InvalidStatement,
             ErrorSpan{curToken().filePath, curToken().value, curToken().line, curToken().column},
             "ErrorManager.Syntax.InvalidStatement.expectedBody.message", {"for"},
@@ -878,10 +1022,9 @@ MemoryPtr<ForLoopNode> Parser::parseFor() {
 MemoryPtr<WhileLoopNode> Parser::parseWhile() {
     auto token = curToken();
     next();
-    auto dm = getDelimeterNames();
 
-    if (!match(TokenType::Delimeter, dm[Delimeters::LeftParen])) {
-        compiler->errorManager.addError(
+    if (!match(Delimeters::LeftParen)) {
+        errorManager->addError(
             ErrorType::Syntax, SyntaxErrors::MissingToken,
             ErrorSpan{token.filePath, token.value, token.line, token.column},
             "ErrorManager.Syntax.MissingToken.openingParen.message", {"while"},
@@ -891,15 +1034,15 @@ MemoryPtr<WhileLoopNode> Parser::parseWhile() {
     next();
     MemoryPtr<ASTNode> condition = parseExpression();
     if (!condition) {
-        compiler->errorManager.addError(
+        errorManager->addError(
             ErrorType::Syntax, SyntaxErrors::InvalidStatement,
             ErrorSpan{curToken().filePath, curToken().value, curToken().line, curToken().column},
             "ErrorManager.Syntax.InvalidStatement.expectedCondition.message", {"while"},
             "ErrorManager.Syntax.InvalidStatement.expectedCondition.hint", {"while"});
         return nullptr;
     }
-    if (!match(TokenType::Delimeter, dm[Delimeters::RightParen])) {
-        compiler->errorManager.addError(
+    if (!match(Delimeters::RightParen)) {
+        errorManager->addError(
             ErrorType::Syntax, SyntaxErrors::MissingToken,
             ErrorSpan{curToken().filePath, curToken().value, curToken().line, curToken().column},
             "ErrorManager.Syntax.MissingToken.closingParen.message", {"while"},
@@ -910,7 +1053,7 @@ MemoryPtr<WhileLoopNode> Parser::parseWhile() {
 
     auto body = parseBlock();
     if (!body) {
-        compiler->errorManager.addError(
+        errorManager->addError(
             ErrorType::Syntax, SyntaxErrors::InvalidStatement,
             ErrorSpan{curToken().filePath, curToken().value, curToken().line, curToken().column},
             "ErrorManager.Syntax.InvalidStatement.expectedBody.message", {"while"},
@@ -923,15 +1066,14 @@ MemoryPtr<WhileLoopNode> Parser::parseWhile() {
     return node;
 }
 
+
 // ==== Declarations ====
 MemoryPtr<FunctionNode> Parser::parseFunction(std::vector<MemoryPtr<CallExpressionNode>> decorators, std::vector<MemoryPtr<ModifierNode>> modifiers) {
     next();
-    auto dn = getDelimeterNames();
-    auto on = getOperatorNames();
 
     Token nameToken = curToken();
     if (!match(TokenType::Identifier)) {
-        compiler->errorManager.addError(
+        errorManager->addError(
             ErrorType::Syntax, SyntaxErrors::MissingToken,
             ErrorSpan{nameToken.filePath, nameToken.value, nameToken.line, nameToken.column},
             "ErrorManager.Syntax.MissingToken.functionName.message", {},
@@ -941,8 +1083,8 @@ MemoryPtr<FunctionNode> Parser::parseFunction(std::vector<MemoryPtr<CallExpressi
     std::string funcName = nameToken.value;
     next();
 
-    if (!match(TokenType::Delimeter, dn[Delimeters::LeftParen])) {
-        compiler->errorManager.addError(
+    if (!match(Delimeters::LeftParen)) {
+        errorManager->addError(
             ErrorType::Syntax, SyntaxErrors::MissingToken,
             ErrorSpan{nameToken.filePath, nameToken.value, nameToken.line, nameToken.column},
             "ErrorManager.Syntax.MissingToken.functionParams.message", {funcName},
@@ -952,10 +1094,10 @@ MemoryPtr<FunctionNode> Parser::parseFunction(std::vector<MemoryPtr<CallExpressi
     next();
 
     std::vector<MemoryPtr<ParameterNode>> params;
-    while (!match(TokenType::Delimeter, dn[Delimeters::RightParen])) {
+    while (!match(Delimeters::RightParen)) {
         Token paramName = curToken();
         if (paramName.type != TokenType::Identifier) {
-            compiler->errorManager.addError(
+            errorManager->addError(
                 ErrorType::Syntax, SyntaxErrors::MissingToken,
                 ErrorSpan{paramName.filePath, paramName.value, paramName.line, paramName.column},
                 "ErrorManager.Syntax.MissingToken.functionParamName.message", {funcName},
@@ -964,17 +1106,17 @@ MemoryPtr<FunctionNode> Parser::parseFunction(std::vector<MemoryPtr<CallExpressi
         }
         next();
         MemoryPtr<RawTypeNode> type = nullptr;
-        if (match(TokenType::Delimeter, dn[Delimeters::Colon])) {
+        if (match(Delimeters::Colon)) {
             next();
             type = parseType();
         }
 
         MemoryPtr<ASTNode> defaultValue = nullptr;
-        if (match(TokenType::Operator, on[Operators::Assign])) {
+        if (match(Operators::Assign)) {
             next();
             defaultValue = parseExpression();
             if (!defaultValue) {
-                compiler->errorManager.addError(
+                errorManager->addError(
                     ErrorType::Syntax, SyntaxErrors::MissingToken,
                     ErrorSpan{curToken().filePath, curToken().value, curToken().line, curToken().column},
                     "ErrorManager.Syntax.MissingToken.functionParamDefault.message", {},
@@ -985,12 +1127,12 @@ MemoryPtr<FunctionNode> Parser::parseFunction(std::vector<MemoryPtr<CallExpressi
         auto param = ASTBuilder::createParameter(paramName.value, std::move(type), std::move(defaultValue));
         param->line = paramName.line; param->column = paramName.column; param->filePath = paramName.filePath;
         params.push_back(std::move(param));
-        if (match(TokenType::Delimeter, dn[Delimeters::Comma])) next();
+        if (match(Delimeters::Comma)) next();
         else break;
     }
 
-    if (!match(TokenType::Delimeter, dn[Delimeters::RightParen])) {
-        compiler->errorManager.addError(
+    if (!match(Delimeters::RightParen)) {
+        errorManager->addError(
             ErrorType::Syntax, SyntaxErrors::MissingToken,
             ErrorSpan{curToken().filePath, curToken().value, curToken().line, curToken().column},
             "ErrorManager.Syntax.MissingToken.functionClosingParen.message", {funcName},
@@ -1000,35 +1142,58 @@ MemoryPtr<FunctionNode> Parser::parseFunction(std::vector<MemoryPtr<CallExpressi
     next();
 
     MemoryPtr<RawTypeNode> returnType = nullptr;
-    if (match(TokenType::Operator, on[Operators::TypeArrow])) {
+    if (match(Operators::TypeArrow)) {
         next();
         returnType = parseType();
     }
 
-    MemoryPtr<BlockNode> body = parseBlock();
-    if (!body) {
-        compiler->errorManager.addError(
-            ErrorType::Syntax, SyntaxErrors::InvalidStatement,
-            ErrorSpan{nameToken.filePath, nameToken.value, nameToken.line, nameToken.column},
-            "ErrorManager.Syntax.MissingToken.functionBody.message", {funcName},
-            "ErrorManager.Syntax.MissingToken.functionBody.hint", {funcName});
-        return nullptr;
+    bool isIntrinsic = false;
+    for (const auto& modifier : modifiers) {
+        if (modifier && modifier->modifier == ASTModifierType::Intrinsic) {
+            isIntrinsic = true;
+            break;
+        }
+    }
+
+    MemoryPtr<BlockNode> body = nullptr;
+
+    if (isIntrinsic) {
+        while (isNextLine()) next();
+
+        if (match(Delimeters::RightBraces) || isAtEnd()) {} // не понял че тут
+        else if (match(Delimeters::LeftBraces)) {
+            errorManager->addError(ErrorType::Syntax, SyntaxErrors::InvalidStatement,
+                ErrorSpan{curToken().filePath, curToken().value, curToken().line, curToken().column},
+                "ErrorManager.Syntax.InvalidStatement.intrinsicBody.message",
+                {funcName},
+                "ErrorManager.Syntax.InvalidStatement.intrinsicBody.hint");
+            return nullptr;
+        }
+    }
+    else {
+        body = parseBlock();
+        if (!body) {
+            errorManager->addError(
+                ErrorType::Syntax, SyntaxErrors::InvalidStatement,
+                ErrorSpan{nameToken.filePath, nameToken.value, nameToken.line, nameToken.column},
+                "ErrorManager.Syntax.MissingToken.functionBody.message", {funcName},
+                "ErrorManager.Syntax.MissingToken.functionBody.hint", {funcName});
+            return nullptr;
+        }
     }
 
     auto node = ASTBuilder::createFunction(funcName, std::move(params), std::move(returnType), std::move(body), std::move(decorators), std::move(modifiers));
     node->line = nameToken.line; node->column = nameToken.column; node->filePath = nameToken.filePath;
+    node->isIntrinsic = isIntrinsic;
     return node;
 }
 
 MemoryPtr<ClassNode> Parser::parseClass(std::vector<MemoryPtr<CallExpressionNode>> decorators, std::vector<MemoryPtr<ModifierNode>> modifiers) {
     next();
-    auto dm = getDelimeterNames();
-    auto km = getKeywordNames();
-    auto on = getOperatorNames();
 
     Token nameToken = curToken();
     if (!match(TokenType::Identifier)) {
-        compiler->errorManager.addError(
+        errorManager->addError(
             ErrorType::Syntax, SyntaxErrors::MissingToken,
             ErrorSpan{nameToken.filePath, nameToken.value, nameToken.line, nameToken.column},
             "ErrorManager.Syntax.MissingToken.className.message", {},
@@ -1040,14 +1205,14 @@ MemoryPtr<ClassNode> Parser::parseClass(std::vector<MemoryPtr<CallExpressionNode
 
     // Checking if class is inherited
     MemoryPtr<VariableNode> super = nullptr;
-    if (match(TokenType::Operator, on[Operators::InheritanceArrow])) {
+    if (match(Operators::InheritanceArrow)) {
         next();
         super = ASTBuilder::createVariable(curToken().value);
         next();
     }
 
-    if (!match(TokenType::Delimeter, dm[Delimeters::LeftBraces])) {
-        compiler->errorManager.addError(
+    if (!match(Delimeters::LeftBraces)) {
+        errorManager->addError(
             ErrorType::Syntax, SyntaxErrors::MissingToken,
             ErrorSpan{nameToken.filePath, nameToken.value, nameToken.line, nameToken.column},
             "ErrorManager.Syntax.MissingToken.classBody.message", {className},
@@ -1055,13 +1220,13 @@ MemoryPtr<ClassNode> Parser::parseClass(std::vector<MemoryPtr<CallExpressionNode
         return nullptr;
     }
     next();
-    while (match(TokenType::Delimeter, dm[Delimeters::Semicolon])) next();
+    while (match(Delimeters::Semicolon)) next();
 
     std::vector<MemoryPtr<DeclarationNode>> fields;
     std::vector<MemoryPtr<FunctionNode>> methods;
     MemoryPtr<FunctionNode> constructor = nullptr;
 
-    while (!match(TokenType::Delimeter, dm[Delimeters::RightBraces])) {
+    while (!match(Delimeters::RightBraces)) {
         Token token = curToken();
 
         std::vector<MemoryPtr<CallExpressionNode>> decs = {};
@@ -1069,30 +1234,29 @@ MemoryPtr<ClassNode> Parser::parseClass(std::vector<MemoryPtr<CallExpressionNode
         auto modifs = parseModifiers();
 
         if (match(TokenType::Identifier, className)) {
-            // Moving it back by one to make sure it doesn't screw up
-            pos--;
             auto cfilePath = curToken().filePath; auto cLine = curToken().line; auto cColumn = curToken().column;
-            constructor = parseFunction(std::move(decs), std::move(modifs));
+            constructor = parseConstructor(std::move(decs), std::move(modifs));
             if (!constructor) {
-                compiler->errorManager.addError(
+                errorManager->addError(
                     ErrorType::Syntax, SyntaxErrors::InvalidStatement,
-                    ErrorSpan{curToken().filePath, curToken().value, curToken().line, curToken().column},
+                    ErrorSpan{cfilePath, curToken().value, cLine, cColumn},
                     "ErrorManager.Syntax.InvalidStatement.constructorFailed.message", {className},
                     "ErrorManager.Syntax.InvalidStatement.constructorFailed.hint");
                 return nullptr;
             }
-        } else if (match(TokenType::Keyword, km[Keywords::Function])) {
+        }
+        else if (match(Keywords::Function)) {
             auto method = parseFunction(std::move(decs), std::move(modifs));
             if (method) methods.push_back(std::move(method));
         }
-        else if (token.type == TokenType::Identifier && (lookupNext().type == TokenType::Delimeter && lookupNext().value == dm[Delimeters::Colon])) {
+        else if (match(token, TokenType::Identifier) && (match(lookupNext(), TokenType::Delimeter) && match(lookupNext(), Delimeters::Colon))) {
             MemoryPtr<DeclarationNode> decl = parseDeclaration(std::move(decs), std::move(modifs));
             fields.push_back(std::move(decl));
             if (isNextLine()) next();
         }
         else if (isNextLine()) next();
         else {
-            compiler->errorManager.addError(
+            errorManager->addError(
                 ErrorType::Syntax, SyntaxErrors::UnexpectedToken,
                 ErrorSpan{token.filePath, token.value, token.line, token.column},
                 "ErrorManager.Syntax.InvalidStatement.unexpectedInClass.message", {token.value},
@@ -1108,9 +1272,8 @@ MemoryPtr<ClassNode> Parser::parseClass(std::vector<MemoryPtr<CallExpressionNode
 }
 
 MemoryPtr<BlockNode> Parser::parseBlock() {
-    auto dn = getDelimeterNames();
-    if (!match(TokenType::Delimeter, dn[Delimeters::LeftBraces])) {
-        compiler->errorManager.addError(
+    if (!match(Delimeters::LeftBraces)) {
+        errorManager->addError(
             ErrorType::Syntax, SyntaxErrors::MissingToken,
             ErrorSpan{curToken().filePath, curToken().value, curToken().line, curToken().column},
             "ErrorManager.Syntax.MissingToken.openingBrace.message", {"block"},
@@ -1125,33 +1288,29 @@ MemoryPtr<BlockNode> Parser::parseBlock() {
     while (!isAtEnd()) {
         while (isNextLine()) next();
 
-        if (match(TokenType::Delimeter, dn[Delimeters::RightBraces])) {
+        if (match(Delimeters::RightBraces)) {
             break;
         }
 
         MemoryPtr<ASTNode> stmt = parseStatement();
-        if (!stmt && match(TokenType::Delimeter, dn[Delimeters::RightBraces])) {
+        if (!stmt && match(Delimeters::RightBraces)) {
             break;
         }
         if (!stmt) {
-            // [internal] recovery — not a user-facing message, just dev diagnostics during recovery
-            #ifndef NDEBUG
-            std::println(std::cerr, "[Neoluma/Parser][{}] Failed to parse statement in block (L{}:{})", __func__, curToken().line, curToken().column);
-            #endif
+
             while (!isAtEnd() && !isNextLine()) next();
 
             size_t startPos = pos;
             int guard = 0;
             while (!isAtEnd() && guard++ < 100){
                 if (isNextLine()){ next(); break; }
-                if (match(TokenType::Delimeter, dn[Delimeters::RightBraces])){ break; }
+                if (match(Delimeters::RightBraces)){ break; }
                 next();
             }
 
             if (pos == startPos && !isAtEnd()) next();
 
             if (guard >= 100) {
-                std::println(std::cerr, "{}{}{}", Color::TextHex("#ff5050"), formatStr(Localization::translate("ErrorManager.safetyGuard"), __func__, curToken().filePath, curToken().line, curToken().column), Color::Reset);
                 break;
             }
 
@@ -1161,8 +1320,8 @@ MemoryPtr<BlockNode> Parser::parseBlock() {
         block.push_back(std::move(stmt));
         while (isNextLine()) next();
     }
-    if (!match(TokenType::Delimeter, dn[Delimeters::RightBraces])) {
-        compiler->errorManager.addError(
+    if (!match(Delimeters::RightBraces)) {
+        errorManager->addError(
             ErrorType::Syntax, SyntaxErrors::MissingToken,
             ErrorSpan{curToken().filePath, curToken().value, curToken().line, curToken().column},
             "ErrorManager.Syntax.MissingToken.closingBrace.message", {"block"},
@@ -1174,15 +1333,13 @@ MemoryPtr<BlockNode> Parser::parseBlock() {
 }
 
 MemoryPtr<ASTNode> Parser::parseDecorator(std::vector<MemoryPtr<CallExpressionNode>> decorators, std::vector<MemoryPtr<ModifierNode>> modifiers, bool isCall) {
-    auto dm = getDelimeterNames();
-    auto on = getOperatorNames();
     Token nameToken = curToken();
     MemoryPtr<ASTNode> node;
 
     if (!isCall) {
         next();
         if (!match(TokenType::Identifier)) {
-            compiler->errorManager.addError(
+            errorManager->addError(
                 ErrorType::Syntax, SyntaxErrors::MissingToken,
                 ErrorSpan{nameToken.filePath, nameToken.value, nameToken.line, nameToken.column},
                 "ErrorManager.Syntax.MissingToken.decoratorName.message", {},
@@ -1193,11 +1350,11 @@ MemoryPtr<ASTNode> Parser::parseDecorator(std::vector<MemoryPtr<CallExpressionNo
         next();
 
         std::vector<MemoryPtr<ParameterNode>> params;
-        if (match(TokenType::Delimeter, dm[Delimeters::LeftParen])) {
+        if (match(Delimeters::LeftParen)) {
             next();
-            while (!match(TokenType::Delimeter, dm[Delimeters::RightParen])) {
+            while (!match(Delimeters::RightParen)) {
                 if (!match(TokenType::Identifier)) {
-                    compiler->errorManager.addError(
+                    errorManager->addError(
                         ErrorType::Syntax, SyntaxErrors::MissingToken,
                         ErrorSpan{curToken().filePath, curToken().value, curToken().line, curToken().column},
                         "ErrorManager.Syntax.MissingToken.decoratorParamName.message", {name},
@@ -1210,17 +1367,17 @@ MemoryPtr<ASTNode> Parser::parseDecorator(std::vector<MemoryPtr<CallExpressionNo
                 next();
 
                 MemoryPtr<RawTypeNode> type = nullptr;
-                if (match(TokenType::Delimeter, dm[Delimeters::Colon])) {
+                if (match(Delimeters::Colon)) {
                     next();
                     type = parseType();
                 }
 
                 MemoryPtr<ASTNode> defaultValue = nullptr;
-                if (match(TokenType::Operator, on[Operators::Assign])) {
+                if (match(Operators::Assign)) {
                     next();
                     defaultValue = parseExpression();
                     if (!defaultValue) {
-                        compiler->errorManager.addError(
+                        errorManager->addError(
                             ErrorType::Syntax, SyntaxErrors::MissingToken,
                             ErrorSpan{curToken().filePath, curToken().value, curToken().line, curToken().column},
                             "ErrorManager.Syntax.MissingToken.decoratorParamDefault.message", {},
@@ -1230,12 +1387,12 @@ MemoryPtr<ASTNode> Parser::parseDecorator(std::vector<MemoryPtr<CallExpressionNo
                 }
 
                 params.push_back(ASTBuilder::createParameter(paramName, std::move(type), std::move(defaultValue)));
-                if (match(TokenType::Delimeter, dm[Delimeters::Comma])) next();
+                if (match(Delimeters::Comma)) next();
                 else break;
             }
 
-            if (!match(TokenType::Delimeter, dm[Delimeters::RightParen])) {
-                compiler->errorManager.addError(
+            if (!match(Delimeters::RightParen)) {
+                errorManager->addError(
                     ErrorType::Syntax, SyntaxErrors::MissingToken,
                     ErrorSpan{curToken().filePath, curToken().value, curToken().line, curToken().column},
                     "ErrorManager.Syntax.MissingToken.decoratorClosingParen.message", {name},
@@ -1247,7 +1404,7 @@ MemoryPtr<ASTNode> Parser::parseDecorator(std::vector<MemoryPtr<CallExpressionNo
 
         auto block = parseBlock();
         if (!block) {
-            compiler->errorManager.addError(
+            errorManager->addError(
                 ErrorType::Syntax, SyntaxErrors::InvalidStatement,
                 ErrorSpan{nameToken.filePath, nameToken.value, nameToken.line, nameToken.column},
                 "ErrorManager.Syntax.MissingToken.decoratorBody.message", {name},
@@ -1261,17 +1418,17 @@ MemoryPtr<ASTNode> Parser::parseDecorator(std::vector<MemoryPtr<CallExpressionNo
         next();
 
         std::vector<MemoryPtr<ASTNode>> args;
-        if (match(TokenType::Delimeter, dm[Delimeters::LeftParen])) {
+        if (match(Delimeters::LeftParen)) {
             next();
-            while (!match(TokenType::Delimeter, dm[Delimeters::RightParen])) {
+            while (!match(Delimeters::RightParen)) {
                 auto arg = parseExpression();
                 if (arg) args.push_back(std::move(arg));
 
-                if (match(TokenType::Delimeter, dm[Delimeters::Comma])) next();
+                if (match(Delimeters::Comma)) next();
                 else break;
             }
-            if (!match(TokenType::Delimeter, dm[Delimeters::RightParen])) {
-                compiler->errorManager.addError(
+            if (!match(Delimeters::RightParen)) {
+                errorManager->addError(
                     ErrorType::Syntax, SyntaxErrors::MissingToken,
                     ErrorSpan{nameToken.filePath, nameToken.value, nameToken.line, nameToken.column},
                     "ErrorManager.Syntax.MissingToken.decoratorClosingParen.message", {name},
@@ -1290,15 +1447,13 @@ std::vector<MemoryPtr<CallExpressionNode>> Parser::parseDecoratorCalls() {
     std::vector<MemoryPtr<CallExpressionNode>> calls;
     while (match(TokenType::Decorator)) {
         auto node = parseDecorator({}, {}, true);
-        if (!node) break; // error already reported by parseDecorator
+        if (!node) break; // error already reported by Lexer::parseDecorator
         auto call = as<CallExpressionNode>(std::move(node));
         if (!call) {
             // [internal]
-            std::println(std::cerr, "[Neoluma/Parser][{}] Decorator parsed to a non-call node (L{}:{})", __func__, curToken().line, curToken().column);
             break;
         }
         calls.push_back(std::move(call));
-        next();
     }
 
     return calls;
@@ -1306,25 +1461,26 @@ std::vector<MemoryPtr<CallExpressionNode>> Parser::parseDecoratorCalls() {
 
 std::vector<MemoryPtr<ModifierNode>> Parser::parseModifiers() {
     std::vector<MemoryPtr<ModifierNode>> modifiers;
-    auto kn = getKeywordNames();
-    
+
     while (curToken().type == TokenType::Keyword) {
-        if (match(TokenType::Keyword, kn[Keywords::Static])) 
+        if (match(Keywords::Static))
             modifiers.push_back(ASTBuilder::createModifier(ASTModifierType::Static));
-        else if (match(TokenType::Keyword, kn[Keywords::Const])) 
+        else if (match(Keywords::Const))
             modifiers.push_back(ASTBuilder::createModifier(ASTModifierType::Const));
-        else if (match(TokenType::Keyword, kn[Keywords::Public])) 
+        else if (match(Keywords::Public))
             modifiers.push_back(ASTBuilder::createModifier(ASTModifierType::Public));
-        else if (match(TokenType::Keyword, kn[Keywords::Protected])) 
+        else if (match(Keywords::Protected))
             modifiers.push_back(ASTBuilder::createModifier(ASTModifierType::Protected));
-        else if (match(TokenType::Keyword, kn[Keywords::Private])) 
+        else if (match(Keywords::Private))
             modifiers.push_back(ASTBuilder::createModifier(ASTModifierType::Private));
-        else if (match(TokenType::Keyword, kn[Keywords::Override])) 
+        else if (match(Keywords::Override))
             modifiers.push_back(ASTBuilder::createModifier(ASTModifierType::Override));
-        else if (match(TokenType::Keyword, kn[Keywords::Async])) 
+        else if (match(Keywords::Async))
             modifiers.push_back(ASTBuilder::createModifier(ASTModifierType::Async));
-        else if (match(TokenType::Keyword, kn[Keywords::Debug])) 
+        else if (match(Keywords::Debug))
             modifiers.push_back(ASTBuilder::createModifier(ASTModifierType::Debug));
+        else if (match(Keywords::Intrinsic))
+            modifiers.push_back(ASTBuilder::createModifier(ASTModifierType::Intrinsic));
         else break;
         next();
     }
@@ -1334,14 +1490,12 @@ std::vector<MemoryPtr<ModifierNode>> Parser::parseModifiers() {
 
 MemoryPtr<ASTNode> Parser::parsePreprocessor() {
     Token token = curToken();
-    auto pn = getPreprocessorNames();
-    auto kn = getKeywordNames();
     MemoryPtr<ASTNode> node;
 
-    if (match(TokenType::Preprocessor, pn[Preprocessors::Import])) {
+    if (match(Preprocessors::Import)) {
         next();
         if (!match(TokenType::String)) {
-            compiler->errorManager.addError(
+            errorManager->addError(
                 ErrorType::Syntax, SyntaxErrors::MissingToken,
                 ErrorSpan{token.filePath, token.value, token.line, token.column},
                 "ErrorManager.Syntax.MissingToken.importTarget.message", {},
@@ -1356,10 +1510,10 @@ MemoryPtr<ASTNode> Parser::parsePreprocessor() {
 
         std::string alias;
         next();
-        if (match(TokenType::Keyword, kn[Keywords::As])) {
+        if (match(Keywords::As)) {
             next();
             if (!match(TokenType::Identifier)) {
-                compiler->errorManager.addError(
+                errorManager->addError(
                     ErrorType::Syntax, SyntaxErrors::MissingToken,
                     ErrorSpan{curToken().filePath, curToken().value, curToken().line, curToken().column},
                     "ErrorManager.Syntax.MissingToken.importAlias.message", {},
@@ -1371,10 +1525,10 @@ MemoryPtr<ASTNode> Parser::parsePreprocessor() {
         }
         node = ASTBuilder::createImport(moduleStr, alias, importType);
     }
-    else if (match(TokenType::Preprocessor, pn[Preprocessors::Macro])) {
+    else if (match(Preprocessors::Macro)) {
         next();
         if (!match(TokenType::Identifier)) {
-            compiler->errorManager.addError(
+            errorManager->addError(
                 ErrorType::Syntax, SyntaxErrors::MissingToken,
                 ErrorSpan{token.filePath, token.value, token.line, token.column},
                 "ErrorManager.Syntax.MissingToken.macroIdentifier.message", {},
@@ -1389,35 +1543,9 @@ MemoryPtr<ASTNode> Parser::parsePreprocessor() {
         }
         node = ASTBuilder::createPreprocessor(ASTPreprocessorDirectiveType::Macro, value);
     }
-    else if (match(TokenType::Preprocessor, pn[Preprocessors::Baremetal])) {
-        next();
-        node = ASTBuilder::createPreprocessor(ASTPreprocessorDirectiveType::Baremetal);
-    }
-    else if (match(TokenType::Preprocessor, pn[Preprocessors::Unsafe])) {
+    else if (match(Preprocessors::Unsafe)) {
         next();
         node = ASTBuilder::createPreprocessor(ASTPreprocessorDirectiveType::Unsafe);
-    }
-    else if (match(TokenType::Preprocessor, pn[Preprocessors::Float])) {
-        next();
-        node = ASTBuilder::createPreprocessor(ASTPreprocessorDirectiveType::Float);
-    }
-    else if (compiler->projectManager.config.enableEasterEggs && match(TokenType::Preprocessor, "console")){
-        next();
-        if (match(TokenType::String, "neptunia")){
-            compiler->errorManager.addError(
-            ErrorType::None, PreprocessorErrors::InvalidConsoleArgument, ErrorSpan{token.filePath, "neptunia", token.line, token.column},
-            "Nep is not a console", {},
-            "Nep Nep♪ Nep nep♪ Nep nep neppynep♪🍮");
-            next();
-        } else {
-            compiler->errorManager.addError(
-                ErrorType::Preprocessor, PreprocessorErrors::InvalidDirective,
-                ErrorSpan{token.filePath, "console", token.line, token.column},
-                "ErrorManager.Preprocessor.InvalidDirective.message", {"console"},
-                "ErrorManager.Preprocessor.InvalidDirective.hint");
-            next();
-        }
-        node = ASTBuilder::createPreprocessor(ASTPreprocessorDirectiveType::None);
     }
     else node = ASTBuilder::createPreprocessor(ASTPreprocessorDirectiveType::None);
     node->line = token.line; node->column = token.column; node->filePath = token.filePath;
@@ -1426,11 +1554,8 @@ MemoryPtr<ASTNode> Parser::parsePreprocessor() {
 
 MemoryPtr<EnumNode> Parser::parseEnum(std::vector<MemoryPtr<CallExpressionNode>> decorators, std::vector<MemoryPtr<ModifierNode>> modifiers) {
     next();
-    auto dn = getDelimeterNames();
-    auto on = getOperatorNames();
-
     if (!match(TokenType::Identifier)) {
-        compiler->errorManager.addError(
+        errorManager->addError(
             ErrorType::Syntax, SyntaxErrors::MissingToken,
             ErrorSpan{curToken().filePath, curToken().value, curToken().line, curToken().column},
             "ErrorManager.Syntax.MissingToken.enumName.message", {},
@@ -1439,8 +1564,8 @@ MemoryPtr<EnumNode> Parser::parseEnum(std::vector<MemoryPtr<CallExpressionNode>>
     }
     auto enumToken = curToken();
     next();
-    if (!match(TokenType::Delimeter, dn[Delimeters::LeftBraces])) {
-        compiler->errorManager.addError(
+    if (!match(Delimeters::LeftBraces)) {
+        errorManager->addError(
             ErrorType::Syntax, SyntaxErrors::MissingToken,
             ErrorSpan{enumToken.filePath, enumToken.value, enumToken.line, enumToken.column},
             "ErrorManager.Syntax.MissingToken.enumBody.message", {enumToken.value},
@@ -1451,24 +1576,28 @@ MemoryPtr<EnumNode> Parser::parseEnum(std::vector<MemoryPtr<CallExpressionNode>>
     while (isNextLine()) next();
 
     std::vector<MemoryPtr<EnumMemberNode>> elements;
-    
-    while (!match(TokenType::Delimeter, dn[Delimeters::RightBraces])) {
-        if (curToken().type != TokenType::Identifier) {
-            compiler->errorManager.addError(
+
+    while (!match(Delimeters::RightBraces)) {
+        while (isNextLine()) next();
+        if (match(Delimeters::RightBraces)) break;
+
+        if (!match(TokenType::Identifier)) {
+            errorManager->addError(
                 ErrorType::Syntax, SyntaxErrors::UnexpectedToken,
                 ErrorSpan{curToken().filePath, curToken().value, curToken().line, curToken().column},
                 "ErrorManager.Syntax.InvalidStatement.unexpectedInEnum.message", {curToken().value},
                 "ErrorManager.Syntax.InvalidStatement.unexpectedInEnum.hint");
             return nullptr;
-        } 
+        }
         auto name = curToken().value;
         MemoryPtr<LiteralNode> value = nullptr;
-    
+
         next();
-        if (match(TokenType::Operator, on[Operators::Assign])) {
+        if (match(Operators::Assign)) {
+            next();
             auto tmp = parsePrimary();
             if (!tmp || tmp->type != ASTNodeType::Literal) {
-                compiler->errorManager.addError(
+                errorManager->addError(
                 ErrorType::Syntax, SyntaxErrors::InvalidStatement,
                     ErrorSpan{curToken().filePath, curToken().value, curToken().line, curToken().column},
                     "ErrorManager.Syntax.InvalidStatement.enumNonLiteralValue.message", {name},
@@ -1478,12 +1607,11 @@ MemoryPtr<EnumNode> Parser::parseEnum(std::vector<MemoryPtr<CallExpressionNode>>
             value = as<LiteralNode>(std::move(tmp));
         }
         elements.push_back(ASTBuilder::createEnumMember(name, std::move(value)));
-        next();
 
-        if (match(TokenType::Delimeter, dn[Delimeters::Comma])) next();
+        if (match(Delimeters::Comma)) next();
         else if (isNextLine()) next();
-        else if (!match(TokenType::Delimeter, dn[Delimeters::RightBraces])) {
-            compiler->errorManager.addError(
+        else if (!match(Delimeters::RightBraces)) {
+            errorManager->addError(
                 ErrorType::Syntax, SyntaxErrors::UnexpectedToken,
                 ErrorSpan{curToken().filePath, curToken().value, curToken().line, curToken().column},
                 "ErrorManager.Syntax.InvalidStatement.enumDelimiter.message", {curToken().value},
@@ -1492,8 +1620,8 @@ MemoryPtr<EnumNode> Parser::parseEnum(std::vector<MemoryPtr<CallExpressionNode>>
         }
         else break;
     }
-    if (!match(TokenType::Delimeter, dn[Delimeters::RightBraces])) {
-        compiler->errorManager.addError(
+    if (!match(Delimeters::RightBraces)) {
+        errorManager->addError(
             ErrorType::Syntax, SyntaxErrors::MissingToken,
             ErrorSpan{curToken().filePath, curToken().value, curToken().line, curToken().column},
             "ErrorManager.Syntax.MissingToken.enumClosingBrace.message", {enumToken.value},
@@ -1509,12 +1637,9 @@ MemoryPtr<EnumNode> Parser::parseEnum(std::vector<MemoryPtr<CallExpressionNode>>
 
 MemoryPtr<InterfaceNode> Parser::parseInterface(std::vector<MemoryPtr<CallExpressionNode>> decorators, std::vector<MemoryPtr<ModifierNode>> modifiers) {
     next();
-    auto dn = getDelimeterNames();
-    auto on = getOperatorNames();
-    auto kn = getKeywordNames();
 
     if (!match(TokenType::Identifier)) {
-        compiler->errorManager.addError(
+        errorManager->addError(
             ErrorType::Syntax, SyntaxErrors::MissingToken,
             ErrorSpan{curToken().filePath, curToken().value, curToken().line, curToken().column},
             "ErrorManager.Syntax.MissingToken.interfaceName.message", {},
@@ -1523,29 +1648,32 @@ MemoryPtr<InterfaceNode> Parser::parseInterface(std::vector<MemoryPtr<CallExpres
     }
     auto interfaceToken = curToken();
     next();
-    if (!match(TokenType::Delimeter, dn[Delimeters::LeftBraces])) {
-        compiler->errorManager.addError(
+    if (!match(Delimeters::LeftBraces)) {
+        errorManager->addError(
             ErrorType::Syntax, SyntaxErrors::MissingToken,
             ErrorSpan{interfaceToken.filePath, interfaceToken.value, interfaceToken.line, interfaceToken.column},
             "ErrorManager.Syntax.MissingToken.interfaceBody.message", {interfaceToken.value},
             "ErrorManager.Syntax.MissingToken.interfaceBody.hint");
         return nullptr;
-    } 
+    }
     next();
     while (isNextLine()) next();
 
     std::vector<MemoryPtr<InterfaceFieldNode>> elements;
     std::vector<MemoryPtr<ParameterNode>> params;
-    
-    while (!match(TokenType::Delimeter, dn[Delimeters::RightBraces])) {
+
+    while (!match(Delimeters::RightBraces)) {
         if (curToken().type == TokenType::Identifier) {
             auto name = curToken().value;
             bool isNullable = false;
             next();
-            if (match(TokenType::Operator, on[Operators::Nullable])) isNullable = true;
+            if (match(Operators::Nullable)) {
+                isNullable = true;
+                next();
+            }
 
-            if (!match(TokenType::Delimeter, dn[Delimeters::Colon])) {
-                compiler->errorManager.addError(
+            if (!match(Delimeters::Colon)) {
+                errorManager->addError(
                     ErrorType::Syntax, SyntaxErrors::MissingToken,
                     ErrorSpan{curToken().filePath, curToken().value, curToken().line, curToken().column},
                     "ErrorManager.Syntax.MissingToken.colonInInterface.message", {name},
@@ -1555,12 +1683,11 @@ MemoryPtr<InterfaceNode> Parser::parseInterface(std::vector<MemoryPtr<CallExpres
             next();
 
             MemoryPtr<RawTypeNode> rawType = parseType();
-
             elements.push_back(ASTBuilder::createInterfaceField(name, std::move(rawType), isNullable));
-            next();
+
             if (isNextLine()) next();
-            else if (!match(TokenType::Delimeter, dn[Delimeters::RightBraces])) {
-                compiler->errorManager.addError(
+            else if (!match(Delimeters::RightBraces)) {
+                errorManager->addError(
                     ErrorType::Syntax, SyntaxErrors::UnexpectedToken,
                     ErrorSpan{curToken().filePath, curToken().value, curToken().line, curToken().column},
                     "ErrorManager.Syntax.InvalidStatement.interfaceDelimiter.message", {curToken().value},
@@ -1568,10 +1695,10 @@ MemoryPtr<InterfaceNode> Parser::parseInterface(std::vector<MemoryPtr<CallExpres
                 return nullptr;
             }
             else break;
-        } else if (match(TokenType::Keyword, kn[Keywords::Function])) {
+        } else if (match(Keywords::Function)) {
             next();
             if (curToken().type != TokenType::Identifier) {
-                compiler->errorManager.addError(
+                errorManager->addError(
                     ErrorType::Syntax, SyntaxErrors::MissingToken,
                     ErrorSpan{curToken().filePath, curToken().value, curToken().line, curToken().column},
                     "ErrorManager.Syntax.MissingToken.interfaceMethodName.message", {interfaceToken.value},
@@ -1580,8 +1707,8 @@ MemoryPtr<InterfaceNode> Parser::parseInterface(std::vector<MemoryPtr<CallExpres
             }
             std::string methodName = curToken().value;
             next();
-            if (!match(TokenType::Delimeter, dn[Delimeters::LeftParen])) {
-                compiler->errorManager.addError(
+            if (!match(Delimeters::LeftParen)) {
+                errorManager->addError(
                     ErrorType::Syntax, SyntaxErrors::MissingToken,
                     ErrorSpan{curToken().filePath, curToken().value, curToken().line, curToken().column},
                     "ErrorManager.Syntax.MissingToken.interfaceMethodParams.message", {methodName},
@@ -1589,10 +1716,10 @@ MemoryPtr<InterfaceNode> Parser::parseInterface(std::vector<MemoryPtr<CallExpres
                 return nullptr;
             }
             next();
-            while (!match(TokenType::Delimeter, dn[Delimeters::RightParen])) {
+            while (!match(Delimeters::RightParen)) {
                 Token token = curToken();
                 if (!match(TokenType::Identifier)) {
-                    compiler->errorManager.addError(
+                    errorManager->addError(
                         ErrorType::Syntax, SyntaxErrors::MissingToken,
                         ErrorSpan{token.filePath, token.value, token.line, token.column},
                         "ErrorManager.Syntax.MissingToken.interfaceMethodParamName.message", {methodName},
@@ -1602,16 +1729,16 @@ MemoryPtr<InterfaceNode> Parser::parseInterface(std::vector<MemoryPtr<CallExpres
                 std::string paramName = token.value;
                 next();
                 MemoryPtr<RawTypeNode> type = nullptr;
-                if (match(TokenType::Delimeter, dn[Delimeters::Colon])) {
+                if (match(Delimeters::Colon)) {
                     next();
                     type = parseType();
                 }
                 params.push_back(ASTBuilder::createParameter(paramName, std::move(type), nullptr));
-                if (match(TokenType::Delimeter, dn[Delimeters::Comma])) next();
+                if (match(Delimeters::Comma)) next();
                 else break;
             }
-            if (!match(TokenType::Delimeter, dn[Delimeters::RightParen])) {
-                compiler->errorManager.addError(
+            if (!match(Delimeters::RightParen)) {
+                errorManager->addError(
                     ErrorType::Syntax, SyntaxErrors::MissingToken,
                     ErrorSpan{curToken().filePath, curToken().value, curToken().line, curToken().column},
                     "ErrorManager.Syntax.MissingToken.interfaceMethodClosingParen.message", {methodName},
@@ -1620,10 +1747,10 @@ MemoryPtr<InterfaceNode> Parser::parseInterface(std::vector<MemoryPtr<CallExpres
             }
             next();
             MemoryPtr<VariableNode> returnType = nullptr;
-            if (match(TokenType::Operator, on[Operators::TypeArrow])) {
+            if (match(Operators::TypeArrow)) {
                 next();
                 if (curToken().type != TokenType::Identifier) {
-                    compiler->errorManager.addError(
+                    errorManager->addError(
                         ErrorType::Syntax, SyntaxErrors::MissingToken,
                         ErrorSpan{curToken().filePath, curToken().value, curToken().line, curToken().column},
                         "ErrorManager.Syntax.MissingToken.interfaceReturnType.message", {methodName},
@@ -1637,7 +1764,7 @@ MemoryPtr<InterfaceNode> Parser::parseInterface(std::vector<MemoryPtr<CallExpres
             params.clear();
             if (isNextLine()) next();
         } else {
-            compiler->errorManager.addError(
+            errorManager->addError(
                 ErrorType::Syntax, SyntaxErrors::UnexpectedToken,
                 ErrorSpan{curToken().filePath, curToken().value, curToken().line, curToken().column},
                 "ErrorManager.Syntax.InvalidStatement.unexpectedInInterface.message", {curToken().value},
@@ -1645,8 +1772,8 @@ MemoryPtr<InterfaceNode> Parser::parseInterface(std::vector<MemoryPtr<CallExpres
             return nullptr;
         }
     }
-    if (!match(TokenType::Delimeter, dn[Delimeters::RightBraces])) {
-        compiler->errorManager.addError(
+    if (!match(Delimeters::RightBraces)) {
+        errorManager->addError(
             ErrorType::Syntax, SyntaxErrors::MissingToken,
             ErrorSpan{curToken().filePath, curToken().value, curToken().line, curToken().column},
             "ErrorManager.Syntax.MissingToken.interfaceClosingBrace.message", {interfaceToken.value},
@@ -1660,30 +1787,147 @@ MemoryPtr<InterfaceNode> Parser::parseInterface(std::vector<MemoryPtr<CallExpres
     return node;
 }
 
+MemoryPtr<NamespaceNode> Parser::parseNamespace() {
+    next();
+    auto token = curToken();
+
+    auto name = parsePrimary();
+    if (!name || (name->type != ASTNodeType::Variable && name->type != ASTNodeType::MemberAccess)) {
+        errorManager->addError(
+            ErrorType::Syntax, SyntaxErrors::MissingToken,
+            ErrorSpan{curToken().filePath, curToken().value, curToken().line, curToken().column},
+            "ErrorManager.Syntax.MissingToken.namespaceName.message", {},
+            "ErrorManager.Syntax.MissingToken.namespaceName.hint"
+        );
+        return nullptr;
+    }
+
+    std::string namespaceName = namespaceNameToString(name.get());
+
+    auto body = parseBlock();
+    if (!body) return nullptr;
+
+    auto node = ASTBuilder::createNamespace(std::move(name), std::move(body->statements));
+    node->value = namespaceName; node->filePath = token.filePath; node->line = token.line; node->column = token.column;
+    return node;
+}
+
 // ==== Helper functions ====
 
 // Parses either a block or a single statement after an 'if' condition.
 MemoryPtr<ASTNode> Parser::parseBlockorStatement() {
-    auto dm = getDelimeterNames();
 
-    if (match(TokenType::Delimeter, dm[Delimeters::LeftBraces])) {
+    if (match(Delimeters::LeftBraces)) {
         MemoryPtr<BlockNode> block = parseBlock();
         return std::move(block);
     }
 
     MemoryPtr<ASTNode> block = parseStatement();
-    if(!block) {
-        // [internal]
-        std::println("[Neoluma/Parser][{}] Expected statement after 'if/elif/else/fn' condition", __func__);
+    if(!block) return nullptr;
+    return std::move(block);
+}
+
+MemoryPtr<FunctionNode> Parser::parseConstructor(std::vector<MemoryPtr<CallExpressionNode>> decorators, std::vector<MemoryPtr<ModifierNode>> modifiers) {
+    Token nameToken = curToken();
+    if (!match(TokenType::Identifier)) {
+        errorManager->addError(
+            ErrorType::Syntax, SyntaxErrors::MissingToken,
+            ErrorSpan{nameToken.filePath, nameToken.value, nameToken.line, nameToken.column},
+            "ErrorManager.Syntax.MissingToken.functionName.message", {},
+            "ErrorManager.Syntax.MissingToken.functionName.hint");
         return nullptr;
     }
-    return std::move(block);
+    std::string funcName = nameToken.value;
+    next();
+
+    if (!match(Delimeters::LeftParen)) {
+        errorManager->addError(
+            ErrorType::Syntax, SyntaxErrors::MissingToken,
+            ErrorSpan{nameToken.filePath, nameToken.value, nameToken.line, nameToken.column},
+            "ErrorManager.Syntax.MissingToken.functionParams.message", {funcName},
+            "ErrorManager.Syntax.MissingToken.functionParams.hint", {funcName});
+        return nullptr;
+    }
+    next();
+
+    std::vector<MemoryPtr<ParameterNode>> params;
+    while (!match(Delimeters::RightParen)) {
+        Token paramName = curToken();
+        if (paramName.type != TokenType::Identifier) {
+            errorManager->addError(
+                ErrorType::Syntax, SyntaxErrors::MissingToken,
+                ErrorSpan{paramName.filePath, paramName.value, paramName.line, paramName.column},
+                "ErrorManager.Syntax.MissingToken.functionParamName.message", {funcName},
+                "ErrorManager.Syntax.MissingToken.functionParamName.hint");
+            return nullptr;
+        }
+        next();
+        MemoryPtr<RawTypeNode> type = nullptr;
+        if (match(Delimeters::Colon)) {
+            next();
+            type = parseType();
+        }
+
+        MemoryPtr<ASTNode> defaultValue = nullptr;
+        if (match(Operators::Assign)) {
+            next();
+            defaultValue = parseExpression();
+            if (!defaultValue) {
+                errorManager->addError(
+                    ErrorType::Syntax, SyntaxErrors::MissingToken,
+                    ErrorSpan{curToken().filePath, curToken().value, curToken().line, curToken().column},
+                    "ErrorManager.Syntax.MissingToken.functionParamDefault.message", {},
+                    "ErrorManager.Syntax.MissingToken.functionParamDefault.hint");
+                return nullptr;
+            }
+        }
+        auto param = ASTBuilder::createParameter(paramName.value, std::move(type), std::move(defaultValue));
+        param->line = paramName.line; param->column = paramName.column; param->filePath = paramName.filePath;
+        params.push_back(std::move(param));
+        if (match(Delimeters::Comma)) next();
+        else break;
+    }
+
+    if (!match(Delimeters::RightParen)) {
+        errorManager->addError(
+            ErrorType::Syntax, SyntaxErrors::MissingToken,
+            ErrorSpan{curToken().filePath, curToken().value, curToken().line, curToken().column},
+            "ErrorManager.Syntax.MissingToken.functionClosingParen.message", {funcName},
+            "ErrorManager.Syntax.MissingToken.functionClosingParen.hint");
+        return nullptr;
+    }
+    next();
+
+    MemoryPtr<RawTypeNode> returnType = nullptr;
+    if (match(Operators::TypeArrow)) {
+        next();
+        returnType = parseType();
+    }
+
+    MemoryPtr<BlockNode> body = parseBlock();
+    if (!body) {
+        errorManager->addError(
+            ErrorType::Syntax, SyntaxErrors::InvalidStatement,
+            ErrorSpan{nameToken.filePath, nameToken.value, nameToken.line, nameToken.column},
+            "ErrorManager.Syntax.MissingToken.functionBody.message", {funcName},
+            "ErrorManager.Syntax.MissingToken.functionBody.hint", {funcName});
+        return nullptr;
+    }
+
+    auto node = ASTBuilder::createFunction(funcName, std::move(params), std::move(returnType), std::move(body), std::move(decorators), std::move(modifiers));
+    for (const auto& modifier : modifiers) {
+        if (modifier->modifier == ASTModifierType::Intrinsic) {
+            node->isIntrinsic = true;
+            node->body = nullptr;
+        }
+    }
+    node->line = nameToken.line; node->column = nameToken.column; node->filePath = nameToken.filePath;
+    return node;
 }
 
 // Detects nextline expression
 bool Parser::isNextLine(){
-    auto dn = getDelimeterNames();
-    if (match(TokenType::Delimeter, dn[Delimeters::Semicolon]) || match(TokenType::Delimeter, dn[Delimeters::Newline])) return true;
+    if (match(Delimeters::Semicolon) || match(Delimeters::Newline)) return true;
     return false;
 }
 
@@ -1692,7 +1936,6 @@ bool Parser::isNextLine(){
 bool Parser::isAssignableAhead(size_t offset) {
     // Take up new offset
     size_t p = pos + offset;
-    auto dn = getDelimeterNames();
 
     // First token must be identifier for sure
     if (p >= tokens.size()) return false;
@@ -1703,15 +1946,14 @@ bool Parser::isAssignableAhead(size_t offset) {
     while (p < tokens.size()) {
 
         // If function call
-        // can't use match() here btw ;c
-        if (tokens[p].type == TokenType::Delimeter && tokens[p].value == dn[Delimeters::LeftParen]) {
+        if (match(tokens[p], Delimeters::LeftParen)) {
             int depth = 1;
             p++; // consume left parenthesis
 
             // to be fair, i could not care less what's inside the () while we look ahead, so just skip until we find the matching right parenthesis
             while (p < tokens.size() && depth > 0) {
-                if (tokens[p].type == TokenType::Delimeter && tokens[p].value == dn[Delimeters::LeftParen]) depth++;
-                else if (tokens[p].type == TokenType::Delimeter && tokens[p].value == dn[Delimeters::RightParen]) depth--;
+                if (match(tokens[p], Delimeters::LeftParen)) depth++;
+                else if (match(tokens[p], Delimeters::RightParen)) depth--;
                 p++;
             }
 
@@ -1719,8 +1961,7 @@ bool Parser::isAssignableAhead(size_t offset) {
         }
 
         // If member access however, we parse it too.
-        if (tokens[p].type == TokenType::Delimeter && tokens[p].value == dn[Delimeters::Dot]) {
-
+        if (match(tokens[p], Delimeters::Dot)) {
             p++; // consume dot
             if (p >= tokens.size()) return false;
             if (tokens[p].type != TokenType::Identifier) return false;
@@ -1737,23 +1978,139 @@ bool Parser::isAssignableAhead(size_t offset) {
 }
 
 // to make math order
-int getOperatorPrecedence(const std::string& op){
-    auto on = getOperatorNames();
-    if (op == on[Operators::Power]) return 7;
-    if (op == on[Operators::Multiply] || op == on[Operators::Divide] || op == on[Operators::Modulo]) return 6;
-    if (op == on[Operators::Add] || op == on[Operators::Subtract]) return 5;
-    if (op == on[Operators::BitwiseLeftShift] || op == on[Operators::BitwiseRightShift]) return 4;
-    if (op == on[Operators::BitwiseAnd]) return 3;
-    if (op == on[Operators::BitwiseXOr]) return 2;
-    if (op == on[Operators::BitwiseOr]) return 1;
-    if (op == on[Operators::Equal] || op == on[Operators::NotEqual] || op == on[Operators::LessThan] || op == on[Operators::GreaterThan] || op == on[Operators::LessThanOrEqual] || op == on[Operators::GreaterThanOrEqual]) return 0;
-    if (op == on[Operators::LogicalAnd]) return -1;
-    if (op == on[Operators::LogicalOr]) return -2;
-    return -3;
+int Parser::getOperatorPrecedence(const std::string& op){
+    auto it = om.find(op);
+    if (it == om.end()) return -3;
+
+    switch (it->second) {
+        case Operators::Power:
+            return 7;
+        case Operators::Multiply:
+        case Operators::Divide:
+        case Operators::Modulo:
+            return 6;
+        case Operators::Add:
+        case Operators::Subtract:
+            return 5;
+        case Operators::BitwiseLeftShift:
+        case Operators::BitwiseRightShift:
+            return 4;
+        case Operators::BitwiseAnd: return 3;
+        case Operators::BitwiseXOr: return 2;
+        case Operators::BitwiseOr: return 1;
+        case Operators::Equal:
+        case Operators::NotEqual:
+        case Operators::LessThan:
+        case Operators::GreaterThan:
+        case Operators::LessThanOrEqual:
+        case Operators::GreaterThanOrEqual:
+            return 0;
+        case Operators::LogicalAnd: return -1;
+        case Operators::LogicalOr: return -2;
+        default: return -3;
+    }
 }
 
-bool isAssignmentOperator(const std::string& op) {
-    auto on = getOperatorNames();
-    return (op == on[Operators::Assign] || op == on[Operators::AddAssign] || op == on[Operators::SubAssign] ||
-            op == on[Operators::MulAssign] || op == on[Operators::DivAssign] || op == on[Operators::ModAssign] || op == on[Operators::PowerAssign]);
+bool Parser::isAssignmentOperator(const std::string& op) {
+    auto it = om.find(op);
+    if (it == om.end()) return false;
+
+    switch (it->second) {
+    case Operators::Assign:
+    case Operators::AddAssign:
+    case Operators::SubAssign:
+    case Operators::MulAssign:
+    case Operators::DivAssign:
+    case Operators::ModAssign:
+    case Operators::PowerAssign:
+        return true;
+    default:
+        return false;
+    }
+}
+
+std::string Parser::namespaceNameToString(ASTNode* node) {
+    if (!node) return "<unknown>";
+
+    if (node->type == ASTNodeType::Variable) return static_cast<VariableNode*>(node)->varName;
+
+    if (node->type == ASTNodeType::MemberAccess) {
+        auto* ma = static_cast<MemberAccessNode*>(node);
+        return namespaceNameToString(ma->parent.get()) + "." +
+            namespaceNameToString(ma->val.get());
+    }
+
+    return "<invalid namespace>";
+}
+
+bool Parser::consumeTypeCloseAngle() {
+    if (match(Operators::GreaterThan)) {
+        next();
+        return true;
+    }
+
+    if (match(Operators::BitwiseRightShift)) {
+        tokens[pos].value = ">";
+        tokens[pos].column += 1;
+        return true;
+    }
+
+    return false;
+}
+
+// TODO: This needs an additional check to make sure of it's correctness. i don't have the energy to do it now
+std::optional<std::vector<MemoryPtr<RawTypeNode>>> Parser::parseGenericArguments(const std::string& typeName) {
+    std::vector<MemoryPtr<RawTypeNode>> arguments;
+
+    if (!match(Operators::LessThan)) return std::optional(std::move(arguments));
+
+    Token openToken = curToken();
+    next();
+
+    if (match(Operators::GreaterThan) || match(Operators::BitwiseRightShift)) {
+        errorManager->addError(ErrorType::Syntax, SyntaxErrors::MissingToken,
+            ErrorSpan{openToken.filePath, openToken.value, openToken.line, openToken.column},
+            "ErrorManager.Syntax.MissingToken.genericTypeArgument.message", {typeName},
+            "ErrorManager.Syntax.MissingToken.genericTypeArgument.hint");
+        return std::nullopt;
+    }
+
+    while (!isAtEnd()) {
+        if (match(Delimeters::Comma) || match(Operators::GreaterThan) || match(Operators::BitwiseRightShift)) {
+            errorManager->addError(ErrorType::Syntax, SyntaxErrors::MissingToken,
+                ErrorSpan{curToken().filePath, curToken().value, curToken().line, curToken().column},
+                "ErrorManager.Syntax.MissingToken.genericTypeArgument.message", {typeName},
+                "ErrorManager.Syntax.MissingToken.genericTypeArgument.hint");
+            return std::nullopt;
+        }
+
+        auto argument = parseType();
+        if (!argument) return std::nullopt;
+        arguments.push_back(std::move(argument));
+
+        if (match(Delimeters::Comma)) {
+            next();
+            if (match(Operators::GreaterThan) || match(Operators::BitwiseRightShift)) {
+                errorManager->addError(ErrorType::Syntax, SyntaxErrors::MissingToken,
+                    ErrorSpan{curToken().filePath, curToken().value, curToken().line, curToken().column},
+                    "ErrorManager.Syntax.MissingToken.genericTypeArgument.message", {typeName},
+                    "ErrorManager.Syntax.MissingToken.genericTypeArgument.hint");
+                return std::nullopt;
+            }
+            continue;
+        }
+        break;
+    }
+
+    if (!match(Operators::GreaterThan)) {
+        errorManager->addError(ErrorType::Syntax, SyntaxErrors::MissingToken,
+            ErrorSpan{curToken().filePath, curToken().value, curToken().line, curToken().column},
+            "ErrorManager.Syntax.MissingToken.genericClosingAngle.message",
+            {typeName},
+            "ErrorManager.Syntax.MissingToken.genericClosingAngle.hint");
+        return std::nullopt;
+    }
+    next();
+
+    return arguments;
 }

@@ -1,0 +1,5 @@
+#import "foo" as util
+#import "bar" as util
+
+@entry
+fn main() {}

@@ -3,7 +3,7 @@
 #include <print>
 #include <filesystem>
 
-#include "CLI/cli.hpp"
+#include "CLI/CLI.hpp"
 #include "Libraries/Color/Color.hpp"
 #include "Core/Frontend/Lexer/Lexer.hpp"
 #include "HelperFunctions.hpp"
@@ -34,18 +34,15 @@ int main(int argc, char** argv) {
         if (!args.options.empty()) {
             ProjectConfig config;
             config.name = args.options.count("name") ? args.options.at("name") : config.name;
-            if (args.options.count("author")) {
+            if (args.options.count("author"))
                 config.author = split(args.options.at("author"), ',');
-            }
             config.version = args.options.count("version") ? args.options.at("version") : config.version;
-            if (args.options.count("license")) {
+            if (args.options.count("license"))
                 config.license = parseLicense(args.options.at("license"));
-            }
-            
             createProject(config);
-        } else { // If no arguments provided, aka "neoluma new", it will run an integrated assistant to set up a project.
-            createProject();
-        }
+        } // If no arguments provided, aka "neoluma new", it will run an integrated assistant to set up a project.
+        else createProject();
+
     } else if (args.command == "build") {
         // build
     } else if (args.command == "run") {
@@ -61,19 +58,21 @@ int main(int argc, char** argv) {
                 else projectFilePath = input;
             }
         }
-        else projectFilePath = findProjectFile(std::filesystem::current_path());
+        else if (args.positional.size() > 0) {
+            std::println("Test");
+        }
+        else {
+            projectFilePath = findProjectFile(std::filesystem::current_path());
 
-        if (projectFilePath.empty()) {
-            std::println("{}[Neoluma/Check] Project file was not found!{}", Color::TextHex("#ff5050"), Color::Reset);
-            return 2;
+            if (projectFilePath.empty()) {
+                std::println("{}[Neoluma/Check] Project file was not found!{}", Color::TextHex("#ff5050"), Color::Reset);
+                return 2;
+            }
         }
 
-        check(projectFilePath.string());
-    } else if (args.command == "version") {
-        std::println("{}Neoluma Alpha Release v0.1{}", Color::TextHex("#ff28e6"), Color::Reset);
-    } else {
-        printHelp();
-    }
+        check(projectFilePath.string(), args.options.count("json"));
+    } else if (args.command == "version") std::println("{}Neoluma Alpha Release v0.1{}", Color::TextHex("#ff28e6"), Color::Reset);
+    else printHelp();
 
     return 0;
 }

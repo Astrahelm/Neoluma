@@ -7,6 +7,7 @@
 
 #include "Libraries/Toml/Toml.hpp"
 #include "Libraries/Paths/Paths.hpp"
+#include "Libraries/Utils/Utils.hpp"
 #if _WIN32
     #include <Windows.h>
 #else
@@ -14,9 +15,8 @@
 #endif
 
 namespace Localization {
-    Paths paths{};
     std::unordered_map<std::string, std::string> localeMap;
-    std::filesystem::path localeFolder = paths.dataDir() + "/locales/";
+    std::filesystem::path localeFolder = Paths::dataDir() + "/locales/";
 
     std::string detectSystemLanguage() {
     #if _WIN32 // i hate microsoft
@@ -116,10 +116,11 @@ namespace Localization {
         if (!std::filesystem::exists(localeFolder)) {
             std::println(std::cerr, "Neoluma's localization module detected that you have no localization folder. We highly suggest you repairing the installation via your installer. \nNeoluma can't run without the localization.");
             // TODO: Implement a fallback system for people who ever will to delete locale configs.
+
             return;
         }
         localeMap = loadJson("en_US");
-        std::filesystem::path configPath = paths.userDataDir() + "/config.jsonc";
+        std::filesystem::path configPath = Paths::userDataDir() + "/config.jsonc";
         if (!std::filesystem::exists(configPath)){
             std::filesystem::create_directory(configPath.parent_path());
             std::string locale = detectSystemLanguage();
@@ -134,15 +135,15 @@ namespace Localization {
         //for (const auto& [k, v] : localeMap) std::println(std::cerr, "{}: {}", k, v);
     }
 
-    std::string translate(const std::string& key) {
+    String translate(const String& key) {
         if (auto it = localeMap.find(key); it != localeMap.end()) return it->second;
         std::println(std::cerr, "[Localization] Couldn't translate key '{}'", key);
         return key;
     }
 
     // Translate with {} formatting
-    std::string translatef(const std::string& key, const std::vector<std::string>& args)  {
-        std::string result = translate(key);
-        return formatStrVec(result, args);
+    String translatef(const String& key, const Array<String>& args)  {
+        String result = translate(key);
+        return String(result, args);
     }
 }

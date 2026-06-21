@@ -20,6 +20,8 @@ const EKeyword keywordMap[] = {
     {"async", Keywords::Async}, {"await", Keywords::Await}, {"const", Keywords::Const}, {"static", Keywords::Static}, 
     {"debug", Keywords::Debug}, {"public", Keywords::Public}, {"protected", Keywords::Protected}, {"private", Keywords::Private},
     {"override", Keywords::Override},
+    // Internal std library keyword that allows passing through LLVM calls
+    {"intrinsic", Keywords::Intrinsic},
 };
 
 const EOperator operatorMap[] {
@@ -33,11 +35,11 @@ const EOperator operatorMap[] {
 };
 
 const EDecorator decoratorMap[] {
-    {"float", Decorators::Float}, {"entry", Decorators::Entry}, {"unsafe", Decorators::Unsafe}, {"comptime", Decorators::Comptime},
+    {"entry", Decorators::Entry}, {"unsafe", Decorators::Unsafe}, {"comptime", Decorators::Comptime},
 };
 
 const EPreprocessor preprocessorMap[] {
-    {"import", Preprocessors::Import},  {"unsafe", Preprocessors::Unsafe}, {"baremetal", Preprocessors::Baremetal}, {"float", Preprocessors::Float}, {"macro", Preprocessors::Macro},
+    {"import", Preprocessors::Import},  {"unsafe", Preprocessors::Unsafe}, {"macro", Preprocessors::Macro},
 };
 
 const EDelimeter delimeterMap[] {
@@ -46,6 +48,14 @@ const EDelimeter delimeterMap[] {
     {";", Delimeters::Semicolon}, {":", Delimeters::Colon}, {"\\n", Delimeters::Newline}, {",", Delimeters::Comma},
     {".", Delimeters::Dot}, {"[", Delimeters::LeftBracket},
     {"]", Delimeters::RightBracket},
+};
+
+const EResolvedType typesMap[] = {
+    { ResolvedType::Int8, "int8" }, { ResolvedType::Int16, "int16" }, { ResolvedType::Int, "int" }, { ResolvedType::Int64, "int64" },
+    { ResolvedType::Int128, "int128" }, { ResolvedType::UInt8, "uint8" }, { ResolvedType::UInt16, "uint16" }, { ResolvedType::UInt, "uint" },
+    { ResolvedType::UInt64, "uint64" }, { ResolvedType::UInt128, "uint128" }, { ResolvedType::Float, "float" }, { ResolvedType::Float64, "float64" },
+    { ResolvedType::Number, "number" }, { ResolvedType::Bool, "bool" }, { ResolvedType::Str, "str" }, { ResolvedType::Array, "array" },
+    { ResolvedType::Dict, "dict" }, { ResolvedType::Set, "set" }, { ResolvedType::Result, "result" }, { ResolvedType::Void, "void" },
 };
 
 std::string Token::toStr() const {
@@ -105,41 +115,8 @@ const std::unordered_map<std::string, Delimeters>& getDelimeterMap() {
     return map;
 }
 
-
-
-const std::unordered_map<Keywords, std::string>& getKeywordNames() {
-    static std::unordered_map<Keywords, std::string> map;
-    if (map.empty()) {
-        for (auto& k : keywordMap) map[k.token] = k.name;
-    }
+const std::unordered_map<std::string, ResolvedType>& getTypeMap() {
+    static std::unordered_map<std::string, ResolvedType> map;
+    if (map.empty()) for (auto& k : typesMap) map[k.name] = k.type;
     return map;
 }
-const std::unordered_map<Operators, std::string>& getOperatorNames() {
-    static std::unordered_map<Operators, std::string> map;
-    if (map.empty()) {
-        for (auto& k : operatorMap) map[k.token] = k.name;
-    }
-    return map;
-}
-const std::unordered_map<Decorators, std::string>& getDecoratorNames() {
-    static std::unordered_map<Decorators, std::string> map;
-    if (map.empty()) {
-        for (auto& k : decoratorMap) map[k.token] = k.name;
-    }
-    return map;
-}
-const std::unordered_map<Preprocessors, std::string>& getPreprocessorNames() {
-    static std::unordered_map<Preprocessors, std::string> map;
-    if (map.empty()) {
-        for (auto& k : preprocessorMap) map[k.token] = k.name;
-    }
-    return map;
-}
-const std::unordered_map<Delimeters, std::string>& getDelimeterNames() {
-    static std::unordered_map<Delimeters, std::string> map;
-    if (map.empty()) {
-        for (auto& k : delimeterMap) map[k.token] = k.name;
-    }
-    return map;
-}
-

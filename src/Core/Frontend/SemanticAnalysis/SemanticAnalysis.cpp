@@ -1,9 +1,11 @@
 #include "SemanticAnalysis.hpp"
+
+#include <iostream>
+
 #include "Core/Compiler.hpp"
-#include "Core/Frontend/ErrorManager/ErrorManager.hpp"
 
 // ==== Main function ====
-void SemanticAnalysis::analyzeProgram(const ProgramUnit& program, const std::vector<ModuleInfo>& infos){
+void SemanticAnalysis::analyzeProgram(Program& program){
     pushScope();
 
     // Defines all built-in decorators.
@@ -12,8 +14,18 @@ void SemanticAnalysis::analyzeProgram(const ProgramUnit& program, const std::vec
         declareName(name, Symbol{Symbol::Kind::Decorator, false, "", 0, 0}, nullptr);
     }
 
-    for (ModuleId id : program.order)
-        analyzeModule(infos[id].module);
+    for (ModuleId id : program.order) {
+        if (id < 0 || id >= static_cast<ModuleId>(program.moduleInfos.size()))
+            continue;
+
+        ModuleNode* module = program.moduleInfos[id].module;
+        if (!module)
+            continue;
+
+        if (!program.moduleInfos[id].module)
+            std::println(std::cerr, "NULL MODULE INFO: {}", id);
+        analyzeModule(module);
+    }
 
     popScope();
 }
@@ -65,7 +77,7 @@ void SemanticAnalysis::analyzeExpression(ASTNode* node) {
         case ASTNodeType::Variable: {
             auto* var = static_cast<VariableNode*>(node);
             if (!findName(var->varName))
-                compiler->errorManager.addError(ErrorType::Analysis, AnalysisErrors::UndefinedVariable,
+                errorManager->addError(ErrorType::Analysis, AnalysisErrors::UndefinedVariable,
                     ErrorSpan{node->filePath, var->varName, node->line, node->column},
                     "ErrorManager.Analysis.UndefinedVariable.message", {var->varName},
                     "ErrorManager.Analysis.UndefinedVariable.hint");
@@ -112,10 +124,12 @@ void SemanticAnalysis::analyzeFunction(FunctionNode* node) {
 
     for (const auto& parameter : node->parameters) {
         if (scopes.back().contains((parameter->parameterName))) {
-            compiler->errorManager.addError(ErrorType::Analysis, AnalysisErrors::DuplicateParameterName,
+            errorManager->addError(ErrorType::Analysis, AnalysisErrors::DuplicateParameterName,
                 ErrorSpan{parameter->filePath, parameter->parameterName, parameter->line, parameter->column},
                 "ErrorManager.Analysis.DuplicateParameterName.message", {parameter->parameterName, node->name},
                 "ErrorManager.Analysis.DuplicateParameterName.hint");
+            popScope();
+            functionDepth--;
             return;
         }
 
@@ -172,7 +186,7 @@ void SemanticAnalysis::analyzeDeclaration(DeclarationNode* node) {
     if (!node->isTypeInference && node->rawType) {
         auto type = resolveType(node->rawType.get());
         if (type == ResolvedType::Unknown)
-            compiler->errorManager.addError(ErrorType::Analysis, AnalysisErrors::UnknownType,
+            errorManager->addError(ErrorType::Analysis, AnalysisErrors::UnknownType,
         ErrorSpan{node->rawType->filePath, node->rawType->varType->varName, node->rawType->line, node->rawType->column},
         "ErrorManager.Analysis.UnknownType.message", {node->rawType->varType->varName, node->variable->varName},
         "ErrorManager.Analysis.UnknownType.hint");
@@ -190,12 +204,12 @@ void SemanticAnalysis::analyzeAssignment(AssignmentNode* node) {
     if (variable && match(variable, ASTNodeType::Variable)) {
         auto* var = static_cast<VariableNode*>(variable);
         auto* symbol = findName(var->varName);
-        if (!symbol) compiler->errorManager.addError(ErrorType::Analysis, AnalysisErrors::UndefinedVariable,
+        if (!symbol) errorManager->addError(ErrorType::Analysis, AnalysisErrors::UndefinedVariable,
             ErrorSpan{var->filePath, var->varName, var->line, var->column},
             "ErrorManager.Analysis.UndefinedVariable.message", {var->varName},
             "ErrorManager.Analysis.UndefinedVariable.hint"
             );
-        else if (symbol->isConst) compiler->errorManager.addError(ErrorType::Analysis, AnalysisErrors::ConstantReassignment,
+        else if (symbol->isConst) errorManager->addError(ErrorType::Analysis, AnalysisErrors::ConstantReassignment,
             ErrorSpan{var->filePath, var->varName, var->line, var->column},
             "ErrorManager.Analysis.ConstantReassignment.message", {var->varName},
             "ErrorManager.Analysis.ConstantReassignment.hint"
@@ -211,22 +225,22 @@ void SemanticAnalysis::analyzeCallExpression(CallExpressionNode* node) {
         auto* sym = findName(varName);
 
         if (!sym && node->isDecoratorCall)
-            compiler->errorManager.addError(ErrorType::Analysis, AnalysisErrors::UndefinedDecorator,
+            errorManager->addError(ErrorType::Analysis, AnalysisErrors::UndefinedDecorator,
                 ErrorSpan{node->filePath, varName, node->line, node->column},
                 "ErrorManager.Analysis.UndefinedDecorator.message", {varName},
                 "ErrorManager.Analysis.UndefinedDecorator.hint");
         else if (!sym && !node->isDecoratorCall)
-            compiler->errorManager.addError(ErrorType::Analysis, AnalysisErrors::UndefinedFunction,
+            errorManager->addError(ErrorType::Analysis, AnalysisErrors::UndefinedFunction,
                 ErrorSpan{node->filePath, varName, node->line, node->column},
                 "ErrorManager.Analysis.UndefinedFunction.message", {varName},
                 "ErrorManager.Analysis.UndefinedFunction.hint");
         else if (sym && node->isDecoratorCall && sym->kind != Symbol::Kind::Decorator)
-            compiler->errorManager.addError(ErrorType::Analysis, AnalysisErrors::DecoratorMisuse,
+            errorManager->addError(ErrorType::Analysis, AnalysisErrors::DecoratorMisuse,
                 ErrorSpan{node->filePath, varName, node->line, node->column},
                 "ErrorManager.Analysis.DecoratorMisuse.message", {varName},
                 "ErrorManager.Analysis.DecoratorMisuse.hint");
         else if (sym && !node->isDecoratorCall && sym->kind != Symbol::Kind::Function && sym->kind != Symbol::Kind::Class)
-            compiler->errorManager.addError(ErrorType::Analysis, AnalysisErrors::FunctionMismatch,
+            errorManager->addError(ErrorType::Analysis, AnalysisErrors::FunctionMismatch,
                 ErrorSpan{node->filePath, varName, node->line, node->column},
                 "ErrorManager.Analysis.FunctionMismatch.message", {varName},
                 "ErrorManager.Analysis.FunctionMismatch.hint");
@@ -237,7 +251,7 @@ void SemanticAnalysis::analyzeCallExpression(CallExpressionNode* node) {
             auto varName = static_cast<VariableNode*>(root)->varName;
             auto* symbol = findName(varName);
             if (!symbol)
-                compiler->errorManager.addError(ErrorType::Analysis, AnalysisErrors::UndefinedVariable,
+                errorManager->addError(ErrorType::Analysis, AnalysisErrors::UndefinedVariable,
                     ErrorSpan{node->filePath, varName, node->line, node->column},
                     "ErrorManager.Analysis.UndefinedVariable.message", {varName},
                     "ErrorManager.Analysis.UndefinedVariable.hint");
@@ -275,7 +289,7 @@ void SemanticAnalysis::analyzeFor(ForLoopNode* node) {
 
 void SemanticAnalysis::analyzeReturn(ReturnStatementNode* node) {
     if (functionDepth <= 0) {
-        compiler->errorManager.addError(ErrorType::Analysis, AnalysisErrors::ReturnOutsideFunction,
+        errorManager->addError(ErrorType::Analysis, AnalysisErrors::ReturnOutsideFunction,
             ErrorSpan{node->filePath, "return", node->line, node->column},
             "ErrorManager.Analysis.ReturnOutsideFunction.message", {},
             "ErrorManager.Analysis.ReturnOutsideFunction.hint");
@@ -286,7 +300,7 @@ void SemanticAnalysis::analyzeReturn(ReturnStatementNode* node) {
 
 void SemanticAnalysis::analyzeBreak(BreakStatementNode* node) {
     if (loopDepth <= 0)
-        compiler->errorManager.addError(ErrorType::Analysis, AnalysisErrors::BreakOutsideLoop,
+        errorManager->addError(ErrorType::Analysis, AnalysisErrors::BreakOutsideLoop,
             ErrorSpan{node->filePath, "break", node->line, node->column},
             "ErrorManager.Analysis.BreakOutsideLoop.message", {},
             "ErrorManager.Analysis.BreakOutsideLoop.hint");
@@ -295,7 +309,7 @@ void SemanticAnalysis::analyzeBreak(BreakStatementNode* node) {
 
 void SemanticAnalysis::analyzeContinue(ContinueStatementNode* node) {
     if (loopDepth <= 0)
-        compiler->errorManager.addError(ErrorType::Analysis, AnalysisErrors::ContinueOutsideLoop,
+        errorManager->addError(ErrorType::Analysis, AnalysisErrors::ContinueOutsideLoop,
             ErrorSpan{node->filePath, "continue", node->line, node->column},
             "ErrorManager.Analysis.ContinueOutsideLoop.message", {},
             "ErrorManager.Analysis.ContinueOutsideLoop.hint");
@@ -345,14 +359,14 @@ void SemanticAnalysis::analyzeSwitch(SwitchNode* node) {
         analyzeStatement(sCase->body.get());
     }
 
-    if (node->defaultCase) analyzeStatement(node->defaultCase.get());
+    if (node->defaultCase) analyzeStatement(node->defaultCase.get()->body.get());
 }
 
 void SemanticAnalysis::analyzeEnum(EnumNode* node) {
     pushScope();
 
     for (const auto& element : node->elements) {
-        if (scopes.back().contains(element->name)) compiler->errorManager.addError(ErrorType::Analysis, AnalysisErrors::DuplicateEnumMember,
+        if (scopes.back().contains(element->name)) errorManager->addError(ErrorType::Analysis, AnalysisErrors::DuplicateEnumMember,
             ErrorSpan{node->filePath, element->name, node->line, node->column},
             "ErrorManager.Analysis.DuplicateEnumMember.message", {element->name, node->name},
             "ErrorManager.Analysis.DuplicateEnumMember.hint"
@@ -428,7 +442,7 @@ bool SemanticAnalysis::declareName(const std::string& name, Symbol symbol, ASTNo
     auto& parent = scopes.back();
 
     if (parent.contains(name)) {
-        compiler->errorManager.addError(ErrorType::Analysis, AnalysisErrors::RedefinedVariable,
+        errorManager->addError(ErrorType::Analysis, AnalysisErrors::RedefinedVariable,
             ErrorSpan{node ? node->filePath : "", name, node ? node->line : 0, node ? node->column : 0},
             "ErrorManager.Analysis.RedefinedVariable.message", {name},
             "ErrorManager.Analysis.RedefinedVariable.hint");
@@ -451,24 +465,4 @@ SemanticAnalysis::Symbol* SemanticAnalysis::findName(const std::string& name) {
             return &scopes[i].find(name)->second;
     }
     return nullptr;
-}
-
-const EResolvedType typesMap[] = {
-    { ResolvedType::Int8, "int8" }, { ResolvedType::Int16, "int16" }, { ResolvedType::Int, "int" }, { ResolvedType::Int64, "int64" },
-    { ResolvedType::Int128, "int128" }, { ResolvedType::UInt8, "uint8" }, { ResolvedType::UInt16, "uint16" }, { ResolvedType::UInt, "uint" },
-    { ResolvedType::UInt64, "uint64" }, { ResolvedType::UInt128, "uint128" }, { ResolvedType::Float32, "float32" }, { ResolvedType::Float64, "float64" },
-    { ResolvedType::Number, "number" }, { ResolvedType::Bool, "bool" }, { ResolvedType::Str, "str" }, { ResolvedType::Array, "array" },
-    { ResolvedType::Dict, "dict" }, { ResolvedType::Set, "set" }, { ResolvedType::Result, "result" }, { ResolvedType::Void, "void" },
-};
-
-const std::unordered_map<std::string, ResolvedType>& getTypeMap() {
-    static std::unordered_map<std::string, ResolvedType> map;
-    if (map.empty()) for (auto& k : typesMap) map[k.name] = k.type;
-    return map;
-}
-
-const std::unordered_map<ResolvedType, std::string>& getTypeNames() {
-    static std::unordered_map<ResolvedType, std::string> map;
-    if (map.empty()) for (auto& k : typesMap) map[k.type] = k.name;
-    return map;
 }

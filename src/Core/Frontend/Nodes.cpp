@@ -54,8 +54,6 @@ static std::string directiveToString(ASTPreprocessorDirectiveType directive) {
     switch (directive) {
         case ASTPreprocessorDirectiveType::Import: return "Import";
         case ASTPreprocessorDirectiveType::Unsafe: return "Unsafe";
-        case ASTPreprocessorDirectiveType::Baremetal: return "Baremetal";
-        case ASTPreprocessorDirectiveType::Float: return "Float";
         case ASTPreprocessorDirectiveType::Macro: return "Macro";
         case ASTPreprocessorDirectiveType::None: return "None";
         default: return "Unknown";
@@ -410,6 +408,16 @@ std::string DictNode::toString(int indent) const {
     return out;
 }
 
+std::string TupleNode::toString(int indent) const {
+    std::vector<std::pair<std::string, std::string>> hdr;
+    appendBaseHeaderFields(hdr, *this);
+
+    std::string out = std::format("{}{} {{\n", ind(indent), makeHeader("Tuple", hdr));
+    appendPtrVec(out, "elements", elements, indent + 2);
+    out += std::format("{}}}", ind(indent));
+    return out;
+}
+
 std::string ResultNode::toString(int indent) const {
     std::vector<std::pair<std::string, std::string>> hdr;
     appendBaseHeaderFields(hdr, *this);
@@ -555,6 +563,17 @@ std::string DecoratorNode::toString(int indent) const {
     appendPtrVec(out, "modifiers", modifiers, indent + 2);
     appendPtrVec(out, "parameters", parameters, indent + 2);
     appendPtrField(out, "body", body, indent + 2);
+    out += std::format("{}}}", ind(indent));
+    return out;
+}
+
+std::string NamespaceNode::toString(int indent) const {
+    std::vector<std::pair<std::string, std::string>> hdr;
+    appendBaseHeaderFields(hdr, *this);
+
+    std::string out = std::format("{}{} {{\n", ind(indent), makeHeader("Namespace", hdr));
+    appendPtrField(out, "name", name, indent + 2);
+    appendPtrVec(out, "body", body, indent + 2);
     out += std::format("{}}}", ind(indent));
     return out;
 }

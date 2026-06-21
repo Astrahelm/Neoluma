@@ -1,0 +1,8 @@
+{
+  "status": "error",
+  "stage": "parser",
+  "error_code": "NSyE2",
+  "line": 3,
+  "column": 24,
+  "message_key": "ErrorManager.Syntax.MissingToken.closingBrace.message"
+}

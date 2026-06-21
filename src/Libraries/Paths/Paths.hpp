@@ -6,13 +6,12 @@
 #pragma once
 #include <string>
 
-struct Paths {
-    ~Paths(){}
-    static std::string executablePath();
+namespace Paths {
+    std::string executablePath();
 
-    static std::string rootDir();
-    static std::string dataDir();
-    static std::string userDataDir();
+    std::string rootDir();
+    std::string dataDir();
+    std::string userDataDir();
 
-    static std::string join(const std::string& a, const std::string& b);
+    std::string join(const std::string& a, const std::string& b);
 };

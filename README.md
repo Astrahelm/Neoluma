@@ -3,17 +3,16 @@
 **Neoluma** *(from et.: gr. neo- & lat. -lumen, aka "New Light")* is a multi-level, general-purpose programming language designed to be *a language for everything*. 
 Whether you're crafting a quick script on your knee or developing a large operating system, Neoluma is made with developer experience in mind. Featuring a clean, Python-JS-like syntax with the structure and power of C++ & C# - it's expressive, efficient, and built for modern development.
 
-| [Website](https://neoluma.dev) | [License](./LICENSE) | [Discord](https://discord.gg/zmrB9dbmy5) | [Crowdin (Translate!)](https://crowdin.com/project/neoluma) |
+| [Website](https://neoluma.dev) | [License](./LICENSE) | [Discord](https://discord.gg/zmrB9dbmy5) |
 
 ## ✨ Features
 - **Clean, modern syntax** inspired by Python, JavaScript, and C#
 - **Static typing** with **type inference** for simplicity and safety
 - Rich type system, including a custom fixed-point `number` type, plus `int`, `float`, `bool`, `string`, `set`, `dict`, `array`, `result`, and more
-- Powerful decorators like `@entry`, `@comptime`, `@unsafe`, `@override`, and others
+- Powerful decorators like `@entry`, `@comptime`, `@unsafe`, and others
 - Flexible preprocessor directives for low-level and modular control:
   - `#import` — import local or external modules (e.g., C++ bindings)
   - `#unsafe` — enable pointer operations
-  - `#baremetal` — target hardware directly
   - `#macro` — define macros for compile-time logic
 - **Built-in async/await** for concurrency
 - **Compile-time evaluation** and an evolving **macro system (WIP)**
@@ -57,7 +56,7 @@ neoluma run main.nm #interpreted way
 - [x] Lexer
 - [x] Parser
 - [x] Semantic Analyzer
-- [ ] LLVM IR Compiler [In progress]
+- [ ] LLVM IR Compiler *[In progress]*
 - [ ] CLI Toolchain
 - [ ] Cross-platform support (Linux / Windows / macOS / Android / iOS / etc.)
 - [ ] Plugin system and editor integration
@@ -92,7 +91,7 @@ It generates the full installation output at `./.build/.runtime/[Debug|Release]/
 
 ## 📖 Credits
 
-**Created by [TsukimotoX](https://github.com/TsukimotoX) under [Apache License](./LICENSE)**. 
+**Created by [TsukimotoX](https://github.com/TsukimotoX) under [Astrahelm Project](https://github.com/Astrahelm/) and [Apache License](./LICENSE)**. 
 
 **Neoluma™** is a [trademark](./TRADEMARK.md) of the **Neoluma** project; the name and branding are **not granted** under the Apache-2.0 license.
 

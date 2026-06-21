@@ -4,10 +4,8 @@
 	// safetyGuard triggers in Parser only.
 	"safetyGuard": "❌😵‍💫 Recovery guard triggered! Stopping parsing to avoid infinite loop. If you see this message somehow, report this to the developers. \n\n Information: \n Function: {},\n File {},\n Happened at Line {}:{}\n\nThank you!\n",
 	"Syntax": {
-		"UnexpectedToken": {
-			"message": "Unexpected token: '{}'",
-			"hint": "Remove it, or make sure you typed it correctly."
-		},
+		"UnexpectedToken.message": "Unexpected token: '{}'",
+		"UnexpectedToken.hint": "Remove it, or make sure you typed it correctly.",
 
 		"MissingToken": {
 			"message": "Missing '{}'",
@@ -23,7 +21,7 @@
 			"missingExpressionLambda.hint": "Provide an expression inside the parentheses.",
 
 			"dictColonAfterKey.message": "Missing ':' after dictionary key '{}'",
-			"dictColonAfterKey.hint": "Add a colon after the key. For example: { key: value }.",
+			"dictColonAfterKey.hint": "Add a colon after the key. For example: {{ key: value }}.",
 
 			"closingParen.message": "Missing closing ')' after '{}'",
 			"closingParen.hint": "Close the parenthesis after '{}'.",
@@ -94,6 +92,12 @@
 			"classBody.message": "Missing '{{' to start class '{}' body",
 			"classBody.hint": "Add '{{' to open the class body.",
 
+			"namespaceName.message": "Missing namespace name after 'namespace'",
+			"namespaceName.hint": "Provide a name for the namespace. For example: namespace MyNamespace {{ ... }}.",
+
+			"namespaceBody.message": "Missing '{{' to start namespace '{}' body",
+			"namespaceBody.hint": "Add '{{' to open the namespace body.",
+
 			"enumName.message": "Missing enum name after 'enum'",
 			"enumName.hint": "Provide a name for the enum. For example: enum Color {{ Red, Green, Blue }}.",
 
@@ -140,7 +144,13 @@
 			"decoratorClosingParen.hint": "Close the parameter list with ')'.",
 
 			"decoratorBody.message": "Missing body for decorator '{}'",
-			"decoratorBody.hint": "Add a block body after the decorator signature."
+			"decoratorBody.hint": "Add a block body after the decorator signature.",
+
+			"genericTypeArgument.message": "Expected generic type argument for '{}'.",
+			"genericTypeArgument.hint": "Write a type inside angle brackets, for example '{}<str>'.",
+
+			"genericClosingAngle.message": "Expected closing '>' for generic type '{}'.",
+			"genericClosingAngle.hint": "Close the generic type argument list with '>'."
 		},
 
 		"InvalidStatement": {
@@ -187,13 +197,21 @@
 			"constructorFailed.hint": "Make sure the constructor matches the class name and has a valid body.",
 
 			"enumNonLiteralValue.message": "Enum member '{}' must have a literal value",
-			"enumNonLiteralValue.hint": "Use a number or string literal. For example: enum Color { Red = 0, Green = 1 }."
+			"enumNonLiteralValue.hint": "Use a number or string literal. For example: enum Color {{ Red = 0, Green = 1 }}.",
+
+			"intrinsicBody.message": "{} cannot have a function body while being an intrinsic function",
+			"intrinsicBody.hint": "Intrinsic calls are reserved for LLVM layer. Remove the curly braces."
+
+
 		},
 
-		"UnterminatedComment": {
-			"message": "Unterminated comment",
-			"hint": "Close the comment with '*/'."
-		}
+		"InvalidNumberFormat.message": "Invalid number format: '{}'",
+		"InvalidNumberFormat.hint": "Numbers can only be written with integer, floating point and exponent. Example: 1.23e-6",
+
+		"UnterminatedComment.message": "Unterminated comment",
+		"UnterminatedComment.hint": "Close the comment with '*/'.",
+
+		"UnterminatedString.message": "Unterminated string"
 	},
 	"Analysis": {
 		"MultipleEntryPoints.message": "Multiple entry points detected",

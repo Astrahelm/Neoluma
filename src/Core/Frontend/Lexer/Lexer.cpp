@@ -1,4 +1,3 @@
-#include "Core/Compiler.hpp"
 #include "Lexer.hpp"
 #include "../Token.hpp"
 
@@ -8,12 +7,11 @@
 #include <print>
 
 #include "HelperFunctions.hpp"
-#include "Libraries/Localization/Localization.hpp"
 
 // ==== Main ====
-std::vector<Token> Lexer::tokenize(const std::string& filePath, const std::string& source) {
+std::vector<Token> Lexer::tokenize(const std::string& filePath) {
     tokens.clear();
-    this->source = source;
+    this->source = readFile(filePath);
     this->filePath = filePath;
     pos = 0; line = 1; column = 1;
 
@@ -41,7 +39,7 @@ std::vector<Token> Lexer::tokenize(const std::string& filePath, const std::strin
             if (uc > 127) {
                 while (!isAtEnd() && (unsigned char)curChar() >= 128 && (unsigned char)curChar() < 192) move();
             }
-            compiler->errorManager.addError(
+            errorManager->addError(
                         ErrorType::Syntax,
                         SyntaxErrors::UnexpectedToken,
                         ErrorSpan{filePath, tok.value, tok.line, tok.column},
@@ -68,11 +66,7 @@ char Lexer::move() {
 
     return c;
 }
-bool Lexer::match(char expected) {
-    if (isAtEnd() || source[pos] != expected) return false;
-    pos++;
-    return true;
-}
+
 bool Lexer::isAtEnd() const { return pos >= source.size(); }
 
 // ==== Parsing functions ====
@@ -82,23 +76,47 @@ void Lexer::parseIK() {
 
     while (!isAtEnd() && (isalnum(curChar()) || curChar() == '_')) word += move();
 
-    auto km = getKeywordMap();
-    auto om = getOperatorMap();
-
     if (km.find(word) != km.end()) tokens.push_back(Token{TokenType::Keyword, word, filePath, sl, sc});
     else if (word == "null") tokens.push_back(Token{TokenType::Null, word, filePath, sl, sc});
     else if (om.find(word) != om.end()) tokens.push_back(Token{TokenType::Operator, word, filePath, sl, sc});
     else tokens.push_back(Token{TokenType::Identifier, word, filePath, sl, sc});
 }
-void Lexer::parseNumber() {
+void Lexer::parseNumber()
+{
     const int sl = line; const int sc = column;
     std::string number;
 
     while (!isAtEnd() && isdigit(curChar())) number += move();
 
-    if (!isAtEnd() && curChar() == '.'){
+    if (!isAtEnd() && curChar() == '.')
+    {
         number += move();
-        while (!isAtEnd() && (isdigit(curChar()) || curChar() == 'e')) number += move();
+
+        if (isAtEnd() || !isdigit(curChar())) {
+            errorManager->addError(ErrorType::Syntax, SyntaxErrors::InvalidNumberFormat,
+                ErrorSpan{filePath, number, sl, sc},
+                "ErrorManager.Syntax.InvalidNumberFormat.message", {number},
+                "ErrorManager.Syntax.InvalidNumberFormat.hint");
+            tokens.push_back(Token{TokenType::Number, number, filePath, sl, sc});
+            return;
+        }
+        while (!isAtEnd() && isdigit(curChar())) number += move();
+    }
+
+    if (!isAtEnd() && (curChar() == 'e' || curChar() == 'E')) {
+        number += move();
+
+        if (!isAtEnd() && (curChar() == '+' || curChar() == '-')) number += move();
+
+        if (isAtEnd() || !isdigit(curChar())) {
+            errorManager->addError(ErrorType::Syntax, SyntaxErrors::InvalidNumberFormat,
+                ErrorSpan{filePath, number, sl, sc},
+                "ErrorManager.Syntax.InvalidNumberFormat.message", {number},
+                "ErrorManager.Syntax.InvalidNumberFormat.hint");
+            tokens.push_back(Token{TokenType::Number, number, filePath, sl, sc});
+            return;
+        }
+        while (!isAtEnd() && isdigit(curChar())) number += move();
     }
 
     tokens.push_back(Token{TokenType::Number, number, filePath, sl, sc});
@@ -112,6 +130,7 @@ void Lexer::parseString() {
     move();
     std::string value;
     bool esc = false; // multipurpose \n stuff checker..
+    bool closedStr = false;
 
     while (!isAtEnd()) {
         char c = curChar();
@@ -122,7 +141,7 @@ void Lexer::parseString() {
                 case '\\': value += '\\'; break;
                 case '"': value += '"'; break;
                 default:
-                    compiler->errorManager.addError(ErrorType::Syntax, SyntaxErrors::UnexpectedToken,
+                    errorManager->addError(ErrorType::Syntax, SyntaxErrors::UnexpectedToken,
                         ErrorSpan{ filePath, formatStr("\\{}",c), line, column},
                         "ErrorManager.Syntax.UnexpectedToken.message", {formatStr("\\{}",c)},
                         "ErrorManager.Syntax.UnexpectedToken.hint");
@@ -132,13 +151,21 @@ void Lexer::parseString() {
             esc = false;
         }
         else if (c == '\\') esc = true;
-        else if (c == '"') break;
+        else if (c == '"') {
+            move();
+            closedStr = true;
+            break;
+        }
         else value += c;
 
         move();
     }
-
-    move();
+    if (!closedStr){
+        errorManager->addError(ErrorType::Syntax, SyntaxErrors::UnterminatedString,
+            ErrorSpan{filePath, "\"", line, column},
+            "ErrorManager.Syntax.UnterminatedString.message");
+        return;
+    }
     tokens.push_back(Token{TokenType::String, value, filePath, sl, sc});
 }
 void Lexer::parseOperator() {
@@ -146,25 +173,21 @@ void Lexer::parseOperator() {
     std::string op;
     op += move();
 
-    auto om = getOperatorMap();
-
     if (!isAtEnd()) {
         std::string twoChar = op + curChar();
-        if (om.find(twoChar) != om.end()) op += move();
-
-        tokens.push_back(Token{TokenType::Operator, op, filePath, sl, sc});
+        if (om.find(twoChar) != om.end())
+            op += move();
     }
+    tokens.push_back(Token{TokenType::Operator, op, filePath, sl, sc});
 }
 void Lexer::parseDelimeter() {
     const int sl = line; const int sc = column;
     std::string delimeter;
     delimeter += move();
 
-    auto dm = getDelimeterMap();
-
     if (dm.find(delimeter) != dm.end()) tokens.push_back(Token{TokenType::Delimeter, delimeter, filePath, sl, sc});
     else {
-        compiler->errorManager.addError(
+        errorManager->addError(
             ErrorType::Syntax,
             SyntaxErrors::UnexpectedToken,
             ErrorSpan{filePath, delimeter, sl, sc},
@@ -178,16 +201,11 @@ void Lexer::parsePreprocessor() {
     move();
     std::string word;
 
-    while (!isAtEnd() && isalpha(curChar())) word += move();
-
-    auto pm = getPreprocessorMap();
+    while (!isAtEnd() && (isalpha(curChar()) || curChar() == '_')) word += move();
 
     if (pm.find(word) != pm.end()) tokens.push_back(Token{TokenType::Preprocessor, word, filePath, sl, sc});
-    else if (compiler->projectManager.config.enableEasterEggs) { if (word == "console") tokens.push_back(Token{TokenType::Preprocessor, word, filePath, sl, sc}); }
     else {
-        if (compiler->projectManager.config.enableEasterEggs) { if (word == "console") tokens.push_back(Token{TokenType::Preprocessor, word, filePath, sl, sc}); }
-
-        compiler->errorManager.addError(
+        errorManager->addError(
             ErrorType::Preprocessor,
             PreprocessorErrors::InvalidDirective,
             ErrorSpan{filePath, '#'+word, sl, sc},
@@ -201,7 +219,7 @@ void Lexer::parseDecorator() {
     move();
     std::string word;
 
-    while (!isAtEnd() && isalpha(curChar())) word += move();
+    while (!isAtEnd() && (isalpha(curChar()) || curChar() == '_')) word += move();
 
     tokens.push_back(Token{TokenType::Decorator, word, filePath, sl, sc});
 }
@@ -221,7 +239,7 @@ void Lexer::skipComment() {
         move(); // '/'
         move(); // '/'
         while (!isAtEnd() && curChar() != '\n') move();
-        move(); // consume newline
+        if (curChar() == '\n') move();
         return;
     }
 
@@ -238,7 +256,7 @@ void Lexer::skipComment() {
             move(); // \n_terminator3000
         }
         // Unterminated block comment
-        compiler->errorManager.addError(ErrorType::Syntax, SyntaxErrors::UnterminatedComment,
+        errorManager->addError(ErrorType::Syntax, SyntaxErrors::UnterminatedComment,
             ErrorSpan{filePath, formatStr("{}{}", source[pos - 2], source[pos - 1]), sl, sc},
             "ErrorManager.Syntax.UnterminatedComment.message", {},
             "Close with */");
@@ -250,12 +268,8 @@ void Lexer::skipComment() {
     tokens.push_back(Token{TokenType::Operator, "/", filePath, sl, sc});
 }
 
-void Lexer::printTokens(const std::string& filename) const {
-    std::println("=== Lexer Output ({}) ===", filename);
-    for (const auto& token : tokens) {
-        //if (token.type == TokenType::Delimeter && token.value == "\\n") std::cout << "";
-        //else
-        std::cout << token.toStr();
-    }
+void Lexer::printTokens() const {
+    std::println("=== Lexer Output ({}) ===", filePath);
+    for (const auto& token : tokens) std::cout << token.toStr();
     std::println("====================");
 }

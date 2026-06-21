@@ -1,6 +1,18 @@
 #import "more/utils" as utils // Utility functions
 #import "more/models" // Data models
 
+namespace math {
+    fn add(a, b) {
+        return a+b;
+    }
+}
+
+namespace std.io {
+    fn print() {
+        // k
+    }
+}
+
 @entry
 fn main() {
     // Create a new user
@@ -10,6 +22,7 @@ fn main() {
 
     // Perform some calculations
     res: int = add(10, 20)
+
     print("10 + 20 = ${res}")
 
     // lambda functions

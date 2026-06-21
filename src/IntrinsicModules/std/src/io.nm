@@ -1,0 +1,14 @@
+namespace std.io {
+    intrinsic fn print(value);
+    intrinsic fn println(value);
+    intrinsic fn println();
+
+    intrinsic fn eprint(value);
+    intrinsic fn eprintln(value);
+    intrinsic fn eprintln();
+
+    intrinsic fn input() -> str;
+    intrinsic fn input(prompt: str) -> str;
+
+    intrinsic fn readLine() -> str;
+}

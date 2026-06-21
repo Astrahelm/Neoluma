@@ -13,7 +13,7 @@
 ## Crowdin Translations
 
 ### Arabic
-- [ZackPd](https://github.com/zackpandora)
+- [Voidkijix](https://github.com/voidkijix)
 
 ### Chinese (Simplified)
 - Soviet Commander (soviet_commander1922 on Discord)

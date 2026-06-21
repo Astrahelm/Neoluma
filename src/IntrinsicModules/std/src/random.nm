@@ -1,0 +1,5 @@
+namespace std.random {
+    intrinsic fn randomInt(min: int, max: int) -> int;
+    intrinsic fn randomFloat() -> float;
+    intrinsic fn randomBool() -> bool;
+}

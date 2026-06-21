@@ -1,0 +1,13 @@
+namespace std.fs {
+    intrinsic fn readText(path: str) -> str;
+    intrinsic fn writeText(path: str, content: str);
+
+    intrinsic fn exists(path: str) -> bool;
+    intrinsic fn isFile(path: str) -> bool;
+    intrinsic fn isDir(path: str) -> bool;
+
+    intrinsic fn remove(path: str);
+    intrinsic fn createDir(path: str);
+
+    intrinsic fn listDir(path: str) -> array<str>;
+}

@@ -1,0 +1,6 @@
+{
+  "status": "error",
+  "stage": "semantic",
+  "error_code": "NAnE30",
+  "message_key": "ErrorManager.Analysis.NoEntryPoints.message"
+}

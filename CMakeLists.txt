@@ -6,15 +6,18 @@ project(neoluma LANGUAGES C CXX)
 
 set(CMAKE_CXX_STANDARD 23)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
-set(CMAKE_CXX_EXTENSIONS OFF)
+set(CMAKE_CXX_EXTENSIONS ON)
+
+message(STATUS "[Neoluma] Using C++ version: ${CMAKE_CXX_STANDARD}")
+message(STATUS "[Neoluma] C++ extensions are ${CMAKE_CXX_EXTENSIONS}")
 
 # Options
-option(NEOLUMA_PORTABLE "Portable layout (resources near executable)" ON)
+option(NEOLUMA_PORTABLE "Portable layout (resources near executable)")
 
 # Set up LLVM
 find_package(LLVM REQUIRED CONFIG)
-message(STATUS "Found LLVM ${LLVM_PACKAGE_VERSION}")
-message(STATUS "Using LLVMConfig.cmake in: ${LLVM_DIR}")
+message(STATUS "[Neoluma] Found LLVM ${LLVM_PACKAGE_VERSION}")
+message(STATUS "[Neoluma] Using LLVMConfig.cmake in: ${LLVM_DIR}")
 
 # ---- Sources ----
 file(GLOB_RECURSE CORE_FILES CONFIGURE_DEPENDS
@@ -71,6 +74,8 @@ target_include_directories(neoluma PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/src)
 # LLVM includes/defs
 target_include_directories(neoluma PRIVATE ${LLVM_INCLUDE_DIRS})
 target_compile_definitions(neoluma PRIVATE ${LLVM_DEFINITIONS})
+target_include_directories(NeolumaCore PRIVATE ${LLVM_INCLUDE_DIRS})
+target_compile_definitions(NeolumaCore PRIVATE ${LLVM_DEFINITIONS})
 
 # ---- LLVM libs ----
 llvm_map_components_to_libnames(LLVM_LIBS
@@ -96,6 +101,11 @@ set_target_properties(neoluma PROPERTIES
     ARCHIVE_OUTPUT_DIRECTORY "${OutputRoot}/.libs/$<CONFIG>"
 )
 
+# shuts up cmake about having extensions
+target_compile_options(NeolumaCLI PRIVATE
+    $<$<CXX_COMPILER_ID:Clang>:-Wno-c23-extensions>
+)
+
 # ---- Installation rules ----
 include(GNUInstallDirs)
 
@@ -104,17 +114,28 @@ install(TARGETS neoluma
 )
 
 install(DIRECTORY ${CMAKE_SOURCE_DIR}/src/Localization/ DESTINATION ${CMAKE_INSTALL_DATADIR}/locales)
+install(DIRECTORY ${CMAKE_SOURCE_DIR}/src/IntrinsicModules/ DESTINATION ${CMAKE_INSTALL_DATADIR}/modules)
+
+# ---- Tests implementation ----
+#set(NEOLUMA_TEST_RUNNER "${CMAKE_SOURCE_DIR}/tests/runner/testrunner.py")
+
+#add_custom_target(frontend_tests
+#    COMMAND "${NEOLUMA_POWERSHELL_EXECUTABLE}"
+#        -ExecutionPolicy Bypass
+#        -File "${NEOLUMA_TEST_RUNNER}"
+#        -ExePath "$<TARGET_FILE:neoluma>"
+#    WORKING_DIRECTORY "${CMAKE_SOURCE_DIR}"
+#    DEPENDS neoluma
+#    COMMENT "Running frontend regression tests..."
+#    VERBATIM
+#)
 
 # ---- Payload creation. ----
-# payload is bundled into installer resources.
+# payload is bundled into installer resources later on.
 # make payload dirs unique per platform+arch+config to avoid overwriting when switching OS/builds
 set(NEOLUMA_PAYLOAD_ROOT "${CMAKE_SOURCE_DIR}/.build/payload/${CMAKE_SYSTEM_NAME}-${CMAKE_SYSTEM_PROCESSOR}/$<CONFIG>")
 set(NEOLUMA_STAGE_DIR   "${NEOLUMA_PAYLOAD_ROOT}/stage")
 set(NEOLUMA_PAYLOAD_ZIP "${NEOLUMA_PAYLOAD_ROOT}/payload.zip")
-
-# where the installer expects resources
-set(INSTALLER_RES_DIR "${CMAKE_SOURCE_DIR}/src/Installer/src-tauri/resources")
-set(INSTALLER_PAYLOAD "${INSTALLER_RES_DIR}/payload.zip")
 
 # multi-config generators require --config. single-config i use (ninja) doesn't.
 set(NEOLUMA_INSTALL_CONFIG_ARG "")
@@ -122,48 +143,30 @@ if(CMAKE_CONFIGURATION_TYPES)
     set(NEOLUMA_INSTALL_CONFIG_ARG --config $<CONFIG>)
 endif()
 
-# uninstaller creation
-if(WIN32)
-    add_executable(uninstaller
-        ${CMAKE_SOURCE_DIR}/src/uninstaller.cpp
-    )
-    target_compile_features(uninstaller PRIVATE cxx_std_23)
-
-    install(TARGETS uninstaller
-        RUNTIME DESTINATION "${NEOLUMA_STAGE_DIR}"
-    )
-else()
-    install(PROGRAMS "${CMAKE_SOURCE_DIR}/resources/uninstall.sh"
-        DESTINATION "${NEOLUMA_STAGE_DIR}"
-        RENAME "uninstall.sh"
-    )
-endif()
-
 add_custom_command(
     OUTPUT "${NEOLUMA_PAYLOAD_ZIP}"
 
     DEPENDS neoluma
-    $<$<PLATFORM_ID:Windows>:uninstaller>
 
     # clean stage folder
     COMMAND ${CMAKE_COMMAND} -E rm -rf "${NEOLUMA_STAGE_DIR}"
 
-    # install to stage
+    # create payload root
+    COMMAND ${CMAKE_COMMAND} -E make_directory "${NEOLUMA_PAYLOAD_ROOT}"
+
+    # install to stage/ folder
     COMMAND ${CMAKE_COMMAND} --install "${CMAKE_BINARY_DIR}"
     --prefix "${NEOLUMA_STAGE_DIR}"
     ${NEOLUMA_INSTALL_CONFIG_ARG}
 
-    # zip the contents of stage (bin/, lib/, ...)
+    # remove old zip
     COMMAND ${CMAKE_COMMAND} -E rm -f "${NEOLUMA_PAYLOAD_ZIP}"
-    COMMAND ${CMAKE_COMMAND} -E make_directory "${NEOLUMA_PAYLOAD_ROOT}"
+
+    # create zip from stage contents
     COMMAND ${CMAKE_COMMAND} -E chdir "${NEOLUMA_STAGE_DIR}"
-    ${CMAKE_COMMAND} -E tar "cf" "${NEOLUMA_PAYLOAD_ZIP}" --format=zip -- .
+        ${CMAKE_COMMAND} -E tar "cf" "${NEOLUMA_PAYLOAD_ZIP}" --format=zip -- .
 
-    # copy to installer resources
-    COMMAND ${CMAKE_COMMAND} -E make_directory "${INSTALLER_RES_DIR}"
-    COMMAND ${CMAKE_COMMAND} -E copy_if_different "${NEOLUMA_PAYLOAD_ZIP}" "${INSTALLER_PAYLOAD}"
-
-    COMMENT "Creating payload.zip for ${CMAKE_SYSTEM_NAME}-${CMAKE_SYSTEM_PROCESSOR} ($<CONFIG>) and copying into installer resources..."
+    COMMENT "[Neoluma] Creating payload.zip for ${CMAKE_SYSTEM_NAME}-${CMAKE_SYSTEM_PROCESSOR} ($<CONFIG>)..."
     VERBATIM
 )
 

@@ -3,34 +3,20 @@
 #include <unordered_map>
 #include <vector>
 
+#include "Core/Extras/ErrorManager/ErrorManager.hpp"
 #include "Core/Frontend/Nodes.hpp"
+#include "Core/Frontend/Token.hpp"
 #include "Core/Frontend/Orchestrator/Orchestrator.hpp"
 
-struct Compiler;
-
-// ResolvedType is an enum of types Neoluma compiler internally supports by default.
-enum class ResolvedType {
-    Int8, Int16, Int, Int64, Int128,
-    UInt8, UInt16, UInt, UInt64, UInt128,
-    Float32, Float64,
-    Number, Bool, Str,
-    Array, Dict, Set, Result,
-    Void, UserDefined, Unknown
-};
-struct EResolvedType {
-    ResolvedType type;
-    std::string name;
-};
-const std::unordered_map<std::string, ResolvedType>& getTypeMap();
-const std::unordered_map<ResolvedType, std::string>& getTypeNames();
+struct Program;
 
 // Semantic Analysis is a part of Frontend in Compiler responsible for logical part of the code.
 struct SemanticAnalysis {
-    Compiler* compiler = nullptr;
-    void setCompiler(Compiler* comp) { compiler = comp; }
+    // ErrorManager is used to report errors
+    ErrorManager* errorManager = nullptr;
 
     // Main entry
-    void analyzeProgram(const ProgramUnit& program, const std::vector<ModuleInfo>& infos);
+    void analyzeProgram(Program& program);
 
     // Per-node analyzers
     void analyzeModule(ModuleNode* module);

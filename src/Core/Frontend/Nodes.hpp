@@ -4,34 +4,28 @@
 #include <variant>
 
 #include "../../HelperFunctions.hpp"
-//#include "llvm/IR/Value.h"
 
 enum struct ASTNodeType {
     Literal, Variable, MemberAccess, Declaration, Assignment, BinaryOperation, UnaryOperation, CallExpression,
     Block, IfStatement, ForLoop, WhileLoop, TryCatch, ReturnStatement, 
-    Function, Class, 
+    Function, Class, Namespace,
     Parameter, Modifier,
     Switch, Case, SCDefault,
     Module,
     Import, Decorator, Preprocessor, 
     BreakStatement, ContinueStatement, ThrowStatement,
-    Array, Set, Dict, Void, Result, Enum, Interface, Lambda,
+    Array, Set, Dict, Tuple, Void, Result, Enum, Interface, Lambda,
     EnumMember, InterfaceField,
-    RawType
+    RawType, GenericParameter,
 };
 
-// enum struct ASTVariableType {
-//     Integer, Float, Number, Boolean, String,
-//     Array, Set, Dictionary, Void, Result,
-//     Undefined
-// };
-
 enum struct ASTModifierType {
-    Public, Private, Protected, Static, Const, Override, Async, Debug
+    Public, Private, Protected, Static, Const, Override, Async, Debug,
+    Intrinsic
 };
 
 enum struct ASTPreprocessorDirectiveType {
-    Import, Unsafe, Baremetal, Float, Macro, None
+    Import, Unsafe, Macro, None
 };
 
 enum struct ASTImportType {
@@ -44,18 +38,24 @@ enum struct ASTImportType {
     Native, Relative, Foreign, ForeignRelative,
 };
 
+struct GenericParameter {
+    std::string name;
+    int line = 0;
+    int column = 0;
+    std::string filePath = "";
+};
+
 struct ASTNode {
     ASTNodeType type;
     std::string value; // for basic values like literals, etc.
 
-    // Tracking the node for the Semantic Analysis purposes
+    // Tracking the node for the ErrorManager purposes
     int line = 0;
     int column = 0;
     std::string filePath = "";
 
     virtual ~ASTNode();
     virtual std::string toString(int indent) const = 0;
-    //virtual llvm::LLVMContext generateCode(); // for the compiler to generate code from this AST node
 };
 
 // All nodes available in Neoluma
@@ -121,13 +121,19 @@ struct BinaryOperationNode : ASTNode {
     std::string toString(int indent) const override;
 };
 
+
+
 struct RawTypeNode : ASTNode {
     MemoryPtr<VariableNode> varType;
     // ASTNode is used only for nullptr. Be aware!
     MemoryPtr<ASTNode> varSize;
 
-    RawTypeNode(MemoryPtr<VariableNode> varType, MemoryPtr<ASTNode> varSize = nullptr)
-    : varType(std::move(varType)), varSize(std::move(varSize)) {
+    // array<str>, dict<str, int>, Box<T>
+    std::vector<MemoryPtr<RawTypeNode>> genericArguments;
+
+    RawTypeNode(MemoryPtr<VariableNode> varType, MemoryPtr<ASTNode> varSize = nullptr,
+        std::vector<MemoryPtr<RawTypeNode>> genericArguments = {})
+    : varType(std::move(varType)), varSize(std::move(varSize)), genericArguments(std::move(genericArguments)) {
         this->type = ASTNodeType::RawType;
     }
 
@@ -320,6 +326,19 @@ struct DictNode : ASTNode {
     std::string toString(int indent) const override;
 };
 
+// For now it's used only in lambda conditions, it must be fixed later
+struct TupleNode : ASTNode {
+    std::vector<MemoryPtr<ASTNode>> elements;
+
+    TupleNode(std::vector<MemoryPtr<ASTNode>> elements)
+        : elements(std::move(elements)) {
+        this->type = ASTNodeType::Tuple;
+    }
+
+    // Suggested by AI. If it fails, it's his fault
+    std::string toString(int indent) const override;
+};
+
 struct ResultNode : ASTNode {
     MemoryPtr<ASTNode> t;
     MemoryPtr<ASTNode> e;
@@ -424,14 +443,12 @@ struct InterfaceNode : ASTNode {
     std::string name;
     std::vector<MemoryPtr<CallExpressionNode>> decorators;
     std::vector<MemoryPtr<ModifierNode>> modifiers;
+    std::vector<GenericParameter> genericParameters;
     std::vector<MemoryPtr<InterfaceFieldNode>> elements;
 
-    InterfaceNode(const std::string& name, std::vector<MemoryPtr<InterfaceFieldNode>> elements, std::vector<MemoryPtr<CallExpressionNode>> decorators = std::vector<MemoryPtr<CallExpressionNode>>{}, std::vector<MemoryPtr<ModifierNode>> modifiers = std::vector<MemoryPtr<ModifierNode>>{})
-    : name(name) {
+    InterfaceNode(const std::string& name, std::vector<MemoryPtr<InterfaceFieldNode>> elements, std::vector<MemoryPtr<CallExpressionNode>> decorators = {}, std::vector<MemoryPtr<ModifierNode>> modifiers = {}, std::vector<GenericParameter> genericParameters = {})
+    : name(name), elements(std::move(elements)), decorators(std::move(decorators)), modifiers(std::move(modifiers)), genericParameters(std::move(genericParameters)) {
         this->type = ASTNodeType::Interface;
-        this->elements = std::move(elements);
-        this->decorators = std::move(decorators);
-        this->modifiers = std::move(modifiers);
     }
 
     // Suggested by AI. If it fails, it's his fault
@@ -454,13 +471,16 @@ struct LambdaNode : ASTNode {
 struct FunctionNode : ASTNode {
     std::vector<MemoryPtr<CallExpressionNode>> decorators;
     std::vector<MemoryPtr<ModifierNode>> modifiers;
+    std::vector<GenericParameter> genericParameters;
+
     std::string name;
     std::vector<MemoryPtr<ParameterNode>> parameters;
     MemoryPtr<RawTypeNode> returnType = nullptr;
     MemoryPtr<BlockNode> body;
+    bool isIntrinsic = false; // Is this a function that passes through an LLVM call?
 
-    FunctionNode(const std::string& name, std::vector<MemoryPtr<ParameterNode>> parameters, MemoryPtr<RawTypeNode> returnType, MemoryPtr<BlockNode> body,std::vector<MemoryPtr<CallExpressionNode>> decorators = {}, std::vector<MemoryPtr<ModifierNode>> modifiers = {})
-        : name(name), parameters(std::move(parameters)), body(std::move(body)), decorators(std::move(decorators)), modifiers(std::move(modifiers)), returnType(std::move(returnType)) {
+    FunctionNode(const std::string& name, std::vector<MemoryPtr<ParameterNode>> parameters, MemoryPtr<RawTypeNode> returnType, MemoryPtr<BlockNode> body,std::vector<MemoryPtr<CallExpressionNode>> decorators = {}, std::vector<MemoryPtr<ModifierNode>> modifiers = {}, std::vector<GenericParameter> genericParameters = {})
+        : name(name), parameters(std::move(parameters)), body(std::move(body)), decorators(std::move(decorators)), modifiers(std::move(modifiers)), genericParameters(std::move(genericParameters)), returnType(std::move(returnType)) {
         this->type = ASTNodeType::Function;
     }
 
@@ -493,12 +513,13 @@ struct ClassNode : ASTNode {
     MemoryPtr<VariableNode> super = nullptr; // Name of class or interface being inherited from, if any
     std::vector<MemoryPtr<CallExpressionNode>> decorators;
     std::vector<MemoryPtr<ModifierNode>> modifiers;
+    std::vector<GenericParameter> genericParameters;
     std::vector<MemoryPtr<DeclarationNode>> fields;
     std::vector<MemoryPtr<FunctionNode>> methods;
 
     ClassNode(const std::string& name, MemoryPtr<FunctionNode> constructor, MemoryPtr<VariableNode> super, std::vector<MemoryPtr<DeclarationNode>> fields, std::vector<MemoryPtr<FunctionNode>> methods,
-              std::vector<MemoryPtr<CallExpressionNode>> decorators = std::vector<MemoryPtr<CallExpressionNode>>{}, std::vector<MemoryPtr<ModifierNode>> modifiers = std::vector<MemoryPtr<ModifierNode>>{})
-        : name(name), constructor(std::move(constructor)), super(std::move(super)), fields(std::move(fields)), methods(std::move(methods)), decorators(std::move(decorators)), modifiers(std::move(modifiers)) {
+              std::vector<MemoryPtr<CallExpressionNode>> decorators = {}, std::vector<MemoryPtr<ModifierNode>> modifiers = {}, std::vector<GenericParameter> genericParameters = {})
+        : name(name), constructor(std::move(constructor)), super(std::move(super)), fields(std::move(fields)), methods(std::move(methods)), decorators(std::move(decorators)), modifiers(std::move(modifiers)), genericParameters(std::move(genericParameters)) {
         this->type = ASTNodeType::Class;
     }
 
@@ -520,6 +541,18 @@ struct DecoratorNode : ASTNode {
     }
 
     // Suggested by AI. If it fails, it's his fault
+    std::string toString(int indent = 0) const override;
+};
+
+struct NamespaceNode : ASTNode {
+    MemoryPtr<ASTNode> name;
+    std::vector<MemoryPtr<ASTNode>> body;
+
+    NamespaceNode(MemoryPtr<ASTNode> name, std::vector<MemoryPtr<ASTNode>> body)
+        : name(std::move(name)), body(std::move(body)) {
+        this->type = ASTNodeType::Namespace;
+    }
+
     std::string toString(int indent = 0) const override;
 };
 
