@@ -2,6 +2,5 @@
 .vscode/
 .idea/
 
-src/Installer/node_modules/
-src/Installer/dist/
-src/Installer/src-tauri/resources/*
+src/Neoluma.Compiler/bin
+src/Neoluma.Compiler/obj

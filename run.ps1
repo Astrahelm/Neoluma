@@ -1,0 +1,1 @@
+﻿dotnet build && .\src\Neoluma.Compiler\bin\Debug\net10.0\neoluma.exe check --project "TestProject/TestProject.nlp"
