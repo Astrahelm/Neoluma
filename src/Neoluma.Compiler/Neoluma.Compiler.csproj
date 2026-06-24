@@ -1,0 +1,40 @@
+﻿<Project Sdk="Microsoft.NET.Sdk">
+    <PropertyGroup>
+        <OutputType>Exe</OutputType>
+        <TargetFramework>net10.0</TargetFramework>
+        
+        <RootNamespace>Neoluma</RootNamespace>
+        <AssemblyName>neoluma</AssemblyName>
+        
+        <Nullable>enable</Nullable>
+        <ImplicitUsings>enable</ImplicitUsings>
+        <LangVersion>latest</LangVersion>
+        
+        <!-- NativeAOT translates Neoluma to native machine code, comes with constraints -->
+        <!-- https://learn.microsoft.com/en-us/dotnet/core/deploying/native-aot/?tabs=windows%2Cnet8#limitations-of-native-aot-deployment -->
+        <IsAotCompatible>true</IsAotCompatible>
+        <PublishAot>true</PublishAot>
+    </PropertyGroup>
+
+    <ItemGroup Label="Packages">
+        <!-- That's like the latest version, can't do 21.x unless i do it myself -->
+        <PackageReference Include="libLLVM" Version="20.1.2" />
+        <PackageReference Include="LLVMSharp" Version="20.1.2" />
+    </ItemGroup>
+  
+    <ItemGroup Label="Embedded Files">
+        <EmbeddedResource Include="CLI/LicenseTemplates/Apache.txt" LogicalName="LicenseTemplates.Apache" />
+        <EmbeddedResource Include="CLI/LicenseTemplates/BoostV1.txt" LogicalName="LicenseTemplates.BoostV1" />
+        <EmbeddedResource Include="CLI/LicenseTemplates/BSDv2Simplified.txt" LogicalName="LicenseTemplates.BSDv2Simplified" />
+        <EmbeddedResource Include="CLI/LicenseTemplates/BSDv3NewRevised.txt" LogicalName="LicenseTemplates.BSDv3NewRevised" />
+        <EmbeddedResource Include="CLI/LicenseTemplates/CC0v1.txt" LogicalName="LicenseTemplates.CC0v1" />
+        <EmbeddedResource Include="CLI/LicenseTemplates/EclipseV2.txt" LogicalName="LicenseTemplates.EclipseV2" />
+        <EmbeddedResource Include="CLI/LicenseTemplates/GNUAGPLv3.txt" LogicalName="LicenseTemplates.GNUAGPLv3" />
+        <EmbeddedResource Include="CLI/LicenseTemplates/GNUGPLv2.txt" LogicalName="LicenseTemplates.GNUGPLv2" />
+        <EmbeddedResource Include="CLI/LicenseTemplates/GNUGPLv3.txt" LogicalName="LicenseTemplates.GNUGPLv3" />
+        <EmbeddedResource Include="CLI/LicenseTemplates/GNULGPLv2_1.txt" LogicalName="LicenseTemplates.GNULGPLv2_1" />
+        <EmbeddedResource Include="CLI/LicenseTemplates/MIT.txt" LogicalName="LicenseTemplates.MIT" />
+        <EmbeddedResource Include="CLI/LicenseTemplates/MozillaV2.txt" LogicalName="LicenseTemplates.MozillaV2" />
+        <EmbeddedResource Include="CLI/LicenseTemplates/Unlicense.txt" LogicalName="LicenseTemplates.Unlicense" />
+    </ItemGroup>
+</Project>
