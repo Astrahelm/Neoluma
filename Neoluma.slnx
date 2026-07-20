@@ -2,4 +2,7 @@
   <Folder Name="/src/">
     <Project Path="src/Neoluma.Compiler/Neoluma.Compiler.csproj" />
   </Folder>
+  <Folder Name="/tests/">
+    <Project Path="tests/Neoluma.Tests/Neoluma.Tests.csproj" />
+  </Folder>
 </Solution>

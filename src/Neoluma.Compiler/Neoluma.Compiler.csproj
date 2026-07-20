@@ -14,6 +14,8 @@
         <!-- https://learn.microsoft.com/en-us/dotnet/core/deploying/native-aot/?tabs=windows%2Cnet8#limitations-of-native-aot-deployment -->
         <IsAotCompatible>true</IsAotCompatible>
         <PublishAot>true</PublishAot>
+	<PublishSingleFile>true</PublishSingleFile>
+    	<SelfContained>true</SelfContained>
     </PropertyGroup>
 
     <ItemGroup Label="Packages">
