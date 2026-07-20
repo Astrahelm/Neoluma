@@ -4,3 +4,6 @@
 
 src/Neoluma.Compiler/bin
 src/Neoluma.Compiler/obj
+
+tests/Neoluma.Tests/bin
+tests/Neoluma.Tests/obj
