@@ -26,7 +26,4 @@ public class ValueTest {
         Assert.True(new JSON.Value([1]).isArray());
         Assert.True(new JSON.Value(new JSON.Object()).isObject());
     }
-    
-    [Fact]
-    public void validate
 }

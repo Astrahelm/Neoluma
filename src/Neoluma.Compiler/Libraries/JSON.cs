@@ -93,7 +93,7 @@ public static class JSON {
     public class Value {
         // Comment strings attached to this node
         public List<string> commentsBefore = new();
-        public string commentsAfter;
+        public List<string> commentsAfter = new();
 
         // int (long) | string | bool | double | Array | Object
         private object? storage;
@@ -223,19 +223,7 @@ public static class JSON {
     public static void writeFile(string filePath, Value value, StringifyOptions? options = null) { }
 
     // ====== Lexer (needed for parser) ======
-    enum TokenType {
-        Integer,
-        String,
-        Boolean,
-        Double,
-        Identifier,
-        Null,
-        Comment,
-        Delimiter,
-        Newline,
-        Unknown,
-        EndOfFile
-    }
+    enum TokenType { Integer, String, Boolean, Double, Identifier, Null, Comment, Delimiter, Newline, Unknown, EndOfFile }
 
     struct Token {
         public readonly TokenType type;
@@ -460,8 +448,7 @@ public static class JSON {
         }
 
         void lexIdentifier(List<Token> tokens) {
-            int sl = line;
-            int sc = col;
+            int sl = line; int sc = col;
             string value = "";
 
             while (!isAtEnd() && (char.IsLetterOrDigit(curChar()) || curChar() == '_' || curChar() == '$'))
@@ -475,11 +462,9 @@ public static class JSON {
 
     // ====== Parser ======
     class Parser {
-        private Value root;
         private ParseOptions parseOptions;
         private List<Token> tokens;
         private int pos;
-        private int lastValueLine;
 
         // Helper
         Token curToken() { return peek(); }
@@ -516,46 +501,50 @@ public static class JSON {
             }
             return comments;
         }
-        List<string> readCommentsAfter(int line) {
+        List<string> readCommentsAfter(bool stopAtNewline = true) {
             List<string> comments = new();
 
-            while (!isAtEnd() && match(TokenType.Comment) && curToken().line == line) {
-                if (!parseOptions.allowComments)
-                    throw new ParseError("Comments are not allowed", curToken().line, curToken().col);
-
-                comments.Add(curToken().value);
-                move();
+            while (!isAtEnd()) {
+                if (match(TokenType.Newline)) {
+                    if (stopAtNewline) break;
+                    move(); continue;
+                }
+                if (match(TokenType.Comment)) {
+                    if (!parseOptions.allowComments)
+                        throw new ParseError("Comments are not allowed", curToken().line, curToken().col);
+                    comments.Add(curToken().value);
+                    move(); continue;
+                }
+                break;
             }
+            
             return comments;
         }
-        // long can't parse hex numbers
         long parseInteger(string text) {
             int sign = 1;
 
             if (text.StartsWith("-")) { sign = -1; text = text[1..]; }
             else if (text.StartsWith("+")) { text = text[1..]; }
 
-            if (text.StartsWith("0x") || text.StartsWith("0X"))
+            if (text.StartsWith("0x") || text.StartsWith("0X")) 
                 return sign * Convert.ToInt64(text[2..], 16);
 
             return sign * long.Parse(text, System.Globalization.CultureInfo.InvariantCulture);
         }
-        // add with replacing duplicate object keys if happening
-        void addProperty(Object obj, Value key, Value val, Token keyToken) {
-            foreach (Property prop in obj) {
-                if (prop.key.isString() && key.isString() && prop.key.asString() == key.asString()) {
+        void addProperty(Object obj, Value key, Value value, Token keyToken) {
+            foreach (Property property in obj) {
+                if (property.key.isString() && key.isString() && property.key.asString() == key.asString()) {
                     if (!parseOptions.duplicateKeysLastWins)
                         throw new ParseError("Duplicate object key", keyToken.line, keyToken.col);
-                    prop.value = val;
+                    property.value = value;
                     return;
                 }
             }
-            obj.Add(new Property(key, val));
+            obj.Add(new Property(key, value));
         }
         
         // Main function
         public Value parseRoot(List<Token> toks, ParseOptions? options) {
-            root = new();
             parseOptions = options ?? new();
             tokens = toks;
             pos = 0;
@@ -564,9 +553,7 @@ public static class JSON {
 
             Value result = parseValue();
             result.commentsBefore.AddRange(before);
-            result.commentsAfter.AddRange(readCommentsAfter(lastValueLine));
-
-            readCommentsBefore();
+            result.commentsAfter.AddRange(readCommentsAfter(false));
 
             if (!match(TokenType.EndOfFile))
                 throw new ParseError("Unexpected token after root value", curToken().line, curToken().col);
@@ -582,9 +569,8 @@ public static class JSON {
             if (match("{")) return parseObject();
             
             move();
-            lastValueLine = token.line;
             
-            if (token.type == TokenType.String || token.type == TokenType.Identifier) return new Value(token.value);
+            if (token.type == TokenType.String) return new Value(token.value);
             if (token.type == TokenType.Boolean) return new Value(token.value == "true");
             if (token.type == TokenType.Null) return new Value();
             if (token.type == TokenType.Integer) return new Value(parseInteger(token.value));
@@ -603,20 +589,17 @@ public static class JSON {
                     throw new ParseError("Array was not closed", curToken().line, curToken().col);
 
                 Value value = parseValue();
-                int valueLine = lastValueLine;
 
                 value.commentsBefore.AddRange(before);
-                value.commentsAfter.AddRange(readCommentsAfter(valueLine));
-
-                List<string> between = readCommentsBefore();
-                value.commentsAfter.AddRange(between);
+                value.commentsAfter.AddRange(readCommentsAfter());
+                
+                while(match(TokenType.Newline)) move();
                 
                 if (match(",")) {
-                    Token comma = move();
-                    value.commentsAfter.AddRange(readCommentsAfter(comma.line));
-
+                    move();
+                    
+                    value.commentsAfter.AddRange(readCommentsAfter());
                     arr.Add(value);
-
                     before = readCommentsBefore();
 
                     if (match("]")) {
@@ -630,7 +613,6 @@ public static class JSON {
                 }
                 
                 arr.Add(value);
-                before = new();
 
                 if (match(TokenType.EndOfFile))
                     throw new ParseError("Array was not closed", curToken().line, curToken().col);
@@ -638,8 +620,8 @@ public static class JSON {
                 if (!match("]"))
                     throw new ParseError("Expected ',' or ']' after array value", curToken().line, curToken().col);
             }
-            
-            if (match("]")) lastValueLine = move().line;
+
+            if (match("]")) move();
             else throw new ParseError("Array was not closed", curToken().line, curToken().col);
             
             return new Value(arr);
@@ -669,18 +651,16 @@ public static class JSON {
                 List<string> valueBefore = readCommentsBefore();
                 
                 Value value = parseValue();
-                int valueLine = lastValueLine;
 
                 value.commentsBefore.AddRange(before);
                 value.commentsBefore.AddRange(valueBefore);
-                value.commentsAfter.AddRange(readCommentsAfter(valueLine));
-
-                List<string> between = readCommentsBefore();
-                value.commentsAfter.AddRange(between);
-
+                value.commentsAfter.AddRange(readCommentsAfter());
+                
+                while(match(TokenType.Newline)) move();
+                
                 if (match(",")) {
-                    Token comma = move();
-                    value.commentsAfter.AddRange(readCommentsAfter(comma.line));
+                    move();
+                    value.commentsAfter.AddRange(readCommentsAfter());
                     addProperty(obj, key, value, keyToken);
                     
                     before = readCommentsBefore();
@@ -696,7 +676,6 @@ public static class JSON {
                 }
                 
                 addProperty(obj, key, value, keyToken);
-                before = new();
 
                 if (match(TokenType.EndOfFile))
                     throw new ParseError("Object was not closed", curToken().line, curToken().col);
@@ -705,7 +684,7 @@ public static class JSON {
                     throw new ParseError("Expected ',' or '}' after object property", curToken().line, curToken().col);
             }
             
-            if (match("}")) lastValueLine = move().line;
+            if (match("}")) move();
             else throw new ParseError("Object was not closed", curToken().line, curToken().col);
             
             return new Value(obj);
