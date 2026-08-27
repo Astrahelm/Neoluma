@@ -16,7 +16,8 @@ Neoluma aims to be a unified language that bridges low-level control and high-le
 
 **Neoluma is in early development, though,** and not many features are available. Contributions and feedback are welcome!
 
-## <span class="emoji" data-emoji="✨">✨</span> Features
+---
+## <div align="center">✨ Features</div>
 - **Clean, modern syntax** - inspired by Python, Typescript, and C#;
 - **Static typing with optional type inference** - for simplicity and safety;
 - **Rich type system** - such as integers, floating-point and fixed-point numbers, booleans, strings, arrays, sets, dictionaries, error-catching `result` and more;
@@ -30,8 +31,8 @@ Neoluma aims to be a unified language that bridges low-level control and high-le
 - **Configurable memory management** - *automatic* or *manual*, with *borrow checker* or *not*, you choose! (from what is available, of course);
 - **Cross-platform compilation with LLVM backend** - allows for native performance and ability to run anywhere;
 - **IDE support** - syntax highlighting, debugging, and project tools, to make development more enjoyable and efficient.
-
-## <span class="emoji" data-emoji="📃">📃</span> File Formats
+---
+## <div align="center">📃 File Formats</div>
 
 - `.nm` — **Neoluma Module**: source code
 - `.nlp` — **Neoluma Project**: project structure/configuration
@@ -41,8 +42,8 @@ project/
 ├── utils.nm
 └── project.nlp
 ```
-
-## <span class="emoji" data-emoji="🧩">🧩</span> Example
+---
+## <div align="center">🧩 Example</div>
 
 ```neoluma
 @entry
@@ -51,6 +52,7 @@ fn main() {
     print("Hello, ${name}!")
 }
 ```
+> [!IMPORTANT]
 > If the function doesn't have a return type, it is `void` by default — no `return` required.
 > Also, if a function has an @entry decorator, the program starts with it's execution, otherwise it will search for main().
 ```bash
@@ -59,8 +61,8 @@ Hello, Neoluma!
 $ neoluma build project.nlp   # or compile it as an executable!
 ...
 ```
-
-## <span class="emoji" data-emoji="🗺️">🗺️</span> Roadmap
+---
+## <div align="center">🗺️ Roadmap</div>
 
 - [x] Lexer
 - [x] Parser
@@ -70,13 +72,13 @@ $ neoluma build project.nlp   # or compile it as an executable!
 - [ ] Cross-platform support (Linux / Windows / macOS / Android / iOS / etc.)
 - [ ] Plugin system and editor integration
 - [ ] Transpilation support (C++, JS, etc.)
-
-## <span class="emoji" data-emoji="🔧">🔧</span> Building from source
+---
+## <div align="center">🔧 Building from source</div>
 
 Neoluma can be built from cloned source via `dotnet` command.
 Just use `dotnet build` in the root directory to build your branch!
 
-## <span class="emoji" data-emoji="📖">📖</span> Credits
+## <div align="center">📖 Credits</div>
 
 **Created by [TsukimotoX](https://github.com/TsukimotoX) under [Astrahelm Project](https://github.com/Astrahelm/) and [Apache License](./LICENSE)**. 
 
