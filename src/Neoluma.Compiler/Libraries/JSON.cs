@@ -247,6 +247,7 @@ public static class JSON {
         }
     }
 
+    // ====== Lexer ======
     class Lexer {
         private string src = "";
         private ParseOptions parseOptions = new();
