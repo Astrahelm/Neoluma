@@ -16,7 +16,6 @@ Neoluma aims to be a unified language that bridges low-level control and high-le
 
 **Neoluma is in early development, though,** and not many features are available. Contributions and feedback are welcome!
 
----
 ## <div align="center">✨ Features</div>
 - **Clean, modern syntax** - inspired by Python, Typescript, and C#;
 - **Static typing with optional type inference** - for simplicity and safety;
@@ -31,7 +30,7 @@ Neoluma aims to be a unified language that bridges low-level control and high-le
 - **Configurable memory management** - *automatic* or *manual*, with *borrow checker* or *not*, you choose! (from what is available, of course);
 - **Cross-platform compilation with LLVM backend** - allows for native performance and ability to run anywhere;
 - **IDE support** - syntax highlighting, debugging, and project tools, to make development more enjoyable and efficient.
----
+
 ## <div align="center">📃 File Formats</div>
 
 - `.nm` — **Neoluma Module**: source code
@@ -42,7 +41,7 @@ project/
 ├── utils.nm
 └── project.nlp
 ```
----
+
 ## <div align="center">🧩 Example</div>
 
 ```neoluma
@@ -61,7 +60,7 @@ Hello, Neoluma!
 $ neoluma build project.nlp   # or compile it as an executable!
 ...
 ```
----
+
 ## <div align="center">🗺️ Roadmap</div>
 
 - [x] Lexer
@@ -72,7 +71,7 @@ $ neoluma build project.nlp   # or compile it as an executable!
 - [ ] Cross-platform support (Linux / Windows / macOS / Android / iOS / etc.)
 - [ ] Plugin system and editor integration
 - [ ] Transpilation support (C++, JS, etc.)
----
+
 ## <div align="center">🔧 Building from source</div>
 
 Neoluma can be built from cloned source via `dotnet` command.
