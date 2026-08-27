@@ -87,29 +87,3 @@ More documentation and compiler features coming soon!
 
 This project uses [LLVM](https://llvm.org/) under the Apache License v2.0 with LLVM Exceptions.
 
-<style>
-.emoji {
-    position: relative;
-    display: inline-block;
-    font-size: 28px;
-    line-height: 1;
-}
-.emoji::after {
-    content: attr(data-emoji);
-    position: absolute;
-    inset: 0;
-    background: linear-gradient(#4A2BD6, #3b82f6);
-    -webkit-background-clip: text;
-    background-clip: text;
-    color: transparent;
-    -webkit-text-fill-color: transparent;
-    mix-blend-mode: hard-light;
-    pointer-events: none;
-}
-
-a {
-    background: linear-gradient(90deg, #4A2BD6, #3b82f6);
-    background-clip: text;
-    -webkit-background-clip: text;
-}
-</style>
