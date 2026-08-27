@@ -195,7 +195,7 @@ public static class JSON {
     // ====== Stringifying Options ======
     public class StringifyOptions {
         public bool pretty = true;
-        public int indent = 2;
+        public int indent = 4;
         public bool emitComments = true;
         public bool escapeNonASCII = false; // if true, escape real Unicode as \uXXXX / surrogate pairs
         public bool sortKeys = false; // optional stable output
@@ -218,7 +218,10 @@ public static class JSON {
         string text = File.ReadAllText(filePath);
         return parse(text, options);
     }
-    //public static string stringify(Value value, StringifyOptions? options = null) { }
+    public static string stringify(Value value, StringifyOptions? options = null) {
+        Stringifier stringifier = new();
+        return stringifier.stringifyRoot(value, options);
+    }
     public static void writeFile(string filePath, Value value, StringifyOptions? options = null) { }
 
     // ====== Lexer (needed for parser) ======
@@ -245,8 +248,7 @@ public static class JSON {
             return !(a == b);
         }
     }
-
-    // ====== Lexer ======
+    
     class Lexer {
         private string src = "";
         private ParseOptions parseOptions = new();
@@ -509,7 +511,7 @@ public static class JSON {
 
     // ====== Parser ======
     class Parser {
-        private ParseOptions parseOptions;
+        private ParseOptions parseOptions = new();
         private List<Token> tokens;
         private int pos;
 
@@ -735,6 +737,154 @@ public static class JSON {
             else throw new ParseError("Object was not closed", curToken().line, curToken().col);
             
             return new Value(obj);
+        }
+    }
+    
+    // ====== Stringifier ======
+    // like parser but... backwards...
+    class Stringifier {
+        private StringifyOptions stringifyOptions;
+        
+        // Helper
+        string stringifyComment(string comment) {
+            return comment.Contains('\n') ? $"/*{comment}*/" : $"//{comment}";
+        }
+        
+        // Main function
+        public string stringifyRoot(Value value, StringifyOptions? options = null) {
+            stringifyOptions = options ?? new();
+            string result = "";
+
+            if (stringifyOptions.emitComments) {
+                foreach (string comment in value.commentsBefore) 
+                    result += stringifyComment(comment) + "\n";
+            }
+            result += stringifyValue(value, 0);
+            if (stringifyOptions.emitComments) {
+                foreach (string comment in value.commentsAfter) 
+                    result += "\n" + stringifyComment(comment);
+            }
+
+            return result;
+        }
+        
+        string stringifyValue(Value value, int depth) {
+            if (value.isNull()) return "null";
+            if (value.isInt()) return value.asInt().ToString(System.Globalization.CultureInfo.InvariantCulture);
+            if (value.isBool()) return value.asBool() ? "true" : "false";
+            if (value.isDouble()) return stringifyDouble(value.asDouble());
+            if (value.isString()) return stringifyString(value.asString());
+            if (value.isArray()) return stringifyArray(value.asArray(), depth);
+            if (value.isObject()) return stringifyObject(value.asObject(), depth);
+
+            throw new Exception("Unknown JSON value type");
+        }
+        
+        string stringifyDouble(double value) {
+            if (double.IsNaN(value)) return "NaN";
+            if (double.IsPositiveInfinity(value)) return "Infinity";
+            if (double.IsNegativeInfinity(value)) return "-Infinity";
+
+            return value.ToString(System.Globalization.CultureInfo.InvariantCulture);
+        }
+        
+        string stringifyString(string value) {
+            string result = "\"";
+
+            foreach (char c in value) {
+                if (c == '"') result += "\\\"";
+                else if (c == '\\') result += "\\\\";
+                else if (c == '\b') result += "\\b";
+                else if (c == '\f') result += "\\f";
+                else if (c == '\n') result += "\\n";
+                else if (c == '\r') result += "\\r";
+                else if (c == '\t') result += "\\t";
+                else if (c < ' ' || c == '\u2028' || c == '\u2029') result += $"\\u{(int)c:X4}"; // unsafe/special characters
+                else if (stringifyOptions.escapeNonASCII && c > 127) result += $"\\u{(int)c:X4}"; // optional Unicode escaping
+                else result += c;
+            }
+
+            return result + "\"";
+        }
+
+        string stringifyArray(Array array, int depth) {
+            if (array.Count == 0) return "[]";
+            string result = stringifyOptions.pretty ? "[\n" : "[";
+
+            for (int i = 0; i < array.Count; i++) {
+                Value value = array[i];
+                bool lineEnd = false;
+
+                if (stringifyOptions.emitComments) {
+                    foreach (string comment in value.commentsBefore) {
+                        if (stringifyOptions.pretty) result += new string(' ', (depth + 1) * stringifyOptions.indent);
+                        result += stringifyComment(comment) + "\n";
+                    }
+                }
+                
+                if (stringifyOptions.pretty) result += new string(' ', (depth + 1) * stringifyOptions.indent);
+                result += stringifyValue(value, depth + 1);
+                
+                if (i < array.Count - 1) result += ",";
+
+                if (stringifyOptions.emitComments) {
+                    foreach (string comment in value.commentsAfter) {
+                        result += " " + stringifyComment(comment);
+                        lineEnd = !comment.Contains('\n');
+                        if (lineEnd) result += "\n";
+                    }
+                }
+
+                if (stringifyOptions.pretty && !lineEnd) result += "\n";
+            }
+            
+            if (stringifyOptions.pretty) result += new string(' ', depth * stringifyOptions.indent);
+
+            return result + "]";
+        }
+
+        string stringifyObject(Object obj, int depth) {
+            if (obj.Count == 0) return "{}";
+
+            List<Property> properties = stringifyOptions.sortKeys
+                ? obj.OrderBy(property => property.key.asString()).ToList()
+                : obj;
+
+            string result = stringifyOptions.pretty ? "{\n" : "{";
+
+            for (int i = 0; i < properties.Count; i++) {
+                Property property = properties[i];
+                Value value = property.value;
+                bool lineEnd = false;
+                
+                if (stringifyOptions.emitComments) {
+                    foreach (string comment in value.commentsBefore) {
+                        if (stringifyOptions.pretty) result += new string(' ', (depth + 1) * stringifyOptions.indent);
+                        result += stringifyComment(comment) + "\n";
+                    }
+                }
+                
+                if (stringifyOptions.pretty) result += new string(' ', (depth + 1) * stringifyOptions.indent);
+                result += stringifyString(property.key.asString());
+                result += stringifyOptions.pretty ? ": " : ":";
+                result += stringifyValue(value, depth + 1);
+                
+                if (i < properties.Count - 1) result += ",";
+                
+                if (stringifyOptions.emitComments) {
+                    foreach (string comment in value.commentsAfter) {
+                        result += " " + stringifyComment(comment);
+                        lineEnd = !comment.Contains('\n');
+                        if (lineEnd) result += "\n";
+                    }
+                }
+
+                if (stringifyOptions.pretty && !lineEnd) result += "\n";
+            }
+            
+            if (stringifyOptions.pretty) result += new string(' ', depth * stringifyOptions.indent);
+            
+            return result + "}";
         }
     }
 }
