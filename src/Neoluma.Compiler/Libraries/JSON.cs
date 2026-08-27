@@ -214,7 +214,6 @@ public static class JSON {
         Lexer lexer = new(); Parser parser = new();
         return parser.parseRoot(lexer.tokenize(text, options), options);
     }
-
     public static Value parseFile(string filePath, ParseOptions? options = null) {
         string text = File.ReadAllText(filePath);
         return parse(text, options);
@@ -395,8 +394,55 @@ public static class JSON {
 
             while (!isAtEnd()) {
                 if (curChar() == '\\') {
-                    str += move();
-                    if (!isAtEnd()) str += move();
+                    move(); // "\"
+                    
+                    if (isAtEnd()) throw new ParseError("String ends after escape character", sl, sc);
+                    char escaped = move();
+
+                    if (escaped == '\'') str += '\'';
+                    else if (escaped == '"') str += '"';
+                    else if (escaped == '\\') str += '\\';
+                    else if (escaped == 'b') str += '\b';
+                    else if (escaped == 'f') str += '\f';
+                    else if (escaped == 'n') str += '\n';
+                    else if (escaped == 'r') str += '\r';
+                    else if (escaped == 't') str += '\t';
+                    else if (escaped == 'v') str += '\v';
+                    else if (escaped == '0') {
+                        if (!isAtEnd() && char.IsDigit(curChar())) 
+                            throw new ParseError("'\\0' cannot be followed by a digit", sl, sc);
+                        str += '\0';
+                    }
+                    else if (escaped == 'x') {
+                        string hex = "";
+
+                        for (int i = 0; i < 2; i++) {
+                            if (isAtEnd() || !char.IsAsciiHexDigit(curChar()))
+                                throw new ParseError("'\\x' must be followed by 2 hexadecimal digits", sl, sc);
+                            hex += move();
+                        }
+
+                        str += (char)Convert.ToInt32(hex, 16);
+                    }
+                    else if (escaped == 'u') {
+                        string hex = "";
+
+                        for (int i = 0; i < 4; i++) {
+                            if (isAtEnd() || !char.IsAsciiHexDigit(curChar()))
+                                throw new ParseError("'\\u' must be followed by 4 hexadecimal digits", sl, sc);
+                            hex += move();
+                        }
+
+                        str += (char)Convert.ToInt32(hex, 16);
+                    }
+                    else if (escaped == '\n') {} // skip because \n disappears properly
+                    else if (escaped == '\r') {
+                        // windows type CRLF continuation
+                        if (!isAtEnd() && curChar() == '\n') move();
+                    }
+                    else if (escaped >= '1' && escaped <= '9') throw new ParseError("Invalid escape sequence", sl, sc);
+                    else { str += escaped; } // json5 just ignores \ atp
+
                     continue;
                 }
 
@@ -422,7 +468,7 @@ public static class JSON {
             // Single-line comment
             if (!isAtEnd() && curChar() == '/') {
                 move();
-                while (!isAtEnd() && curChar() != '\n') comment += move();
+                while (!isAtEnd() && curChar() != '\n' && curChar() != '\r') comment += move();
 
                 tokens.Add(new Token(TokenType.Comment, comment, sl, sc));
                 return;
