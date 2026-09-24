@@ -38,5 +38,7 @@
         <EmbeddedResource Include="CLI/LicenseTemplates/MIT.txt" LogicalName="LicenseTemplates.MIT" />
         <EmbeddedResource Include="CLI/LicenseTemplates/MozillaV2.txt" LogicalName="LicenseTemplates.MozillaV2" />
         <EmbeddedResource Include="CLI/LicenseTemplates/Unlicense.txt" LogicalName="LicenseTemplates.Unlicense" />
+
+        <EmbeddedResource Include="Localization/**/*.jsonc" />
     </ItemGroup>
 </Project>
