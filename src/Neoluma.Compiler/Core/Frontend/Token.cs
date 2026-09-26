@@ -1,17 +1,25 @@
 ﻿namespace Neoluma.Core.Frontend;
 
-enum TokenType {
+public enum TokenType {
     Keyword, Identifier, Number, Operator, String, Delimeter, Unknown, Decorator, Preprocessor, EndOfFile, Null,
 }
 
-struct Token {
-    TokenType type;
-    string value;
+public struct Token {
+    public TokenType type;
+    public string value;
     
-    string filePath;
-    int line, column;
+    public string filePath;
+    public int line, column;
 
-    string toStr() {
+    public Token(TokenType type, string value, string filePath, int line, int column) {
+        this.type = type;
+        this.value = value;
+        this.filePath = filePath;
+        this.line = line;
+        this.column = column;
+    }
+
+    public string toStr() {
         string typeStr;
 
         switch (type) {
@@ -96,7 +104,7 @@ public static class TokenMaps {
         ["intrinsic"] = Keywords.Intrinsic,
     };
     
-    public static readonly Dictionary<string, Operators> operatorMap = new() {
+    public static readonly Dictionary<string, Operators> operators = new() {
         ["+"] = Operators.Add, ["-"] = Operators.Subtract, ["*"] = Operators.Multiply, ["/"] = Operators.Divide, ["%"] = Operators.Modulo, ["^"] = Operators.Power,
         ["=="] = Operators.Equal, ["!="] = Operators.NotEqual, ["<"] = Operators.LessThan, [">"] = Operators.GreaterThan, ["<="] = Operators.LessThanOrEqual, [">="] = Operators.GreaterThanOrEqual,
         ["&&"] = Operators.LogicalAnd, ["||"] = Operators.LogicalOr, ["!"] = Operators.LogicalNot,
@@ -106,15 +114,15 @@ public static class TokenMaps {
         ["~"] = Operators.BitwiseNot, ["&"] = Operators.BitwiseAnd, ["|"] = Operators.BitwiseOr, ["^^"] = Operators.BitwiseXOr, ["<<"] = Operators.BitwiseLeftShift, [">>"] = Operators.BitwiseRightShift,
     };
 
-    public static readonly Dictionary<string, Decorators> decoratorMap = new() {
+    public static readonly Dictionary<string, Decorators> decorators = new() {
         ["entry"] = Decorators.Entry, ["unsafe"] = Decorators.Unsafe, ["comptime"] = Decorators.Comptime,
     };
 
-    public static readonly Dictionary<string, Preprocessors> preprocessorMap = new() {
+    public static readonly Dictionary<string, Preprocessors> preprocessors = new() {
         ["import"] = Preprocessors.Import, ["unsafe"] = Preprocessors.Unsafe, ["macro"] = Preprocessors.Macro,
     };
 
-    public static readonly Dictionary<string, Delimeters> delimeterMap = new() {
+    public static readonly Dictionary<string, Delimeters> delimeters = new() {
         ["("] = Delimeters.LeftParen, [")"] = Delimeters.RightParen,
         ["{"] = Delimeters.LeftBraces, ["}"] = Delimeters.RightBraces,
         [";"] = Delimeters.Semicolon, [":"] = Delimeters.Colon, ["\\n"] = Delimeters.Newline, [","] = Delimeters.Comma,
@@ -122,7 +130,7 @@ public static class TokenMaps {
         ["]"] = Delimeters.RightBracket,
     };
 
-    public static readonly Dictionary<ResolvedType, string> typesMap = new() {
+    public static readonly Dictionary<ResolvedType, string> types = new() {
         [ResolvedType.Int8] = "int8", [ResolvedType.Int16] = "int16", [ResolvedType.Int] = "int", [ResolvedType.Int64] = "int64", [ResolvedType.Int128] = "int128", 
         [ResolvedType.UInt8] = "uint8", [ResolvedType.UInt16] = "uint16", [ResolvedType.UInt] = "uint", [ResolvedType.UInt64] = "uint64", [ResolvedType.UInt128] = "uint128", 
         [ResolvedType.Float] = "float", [ResolvedType.Float64] = "float64", [ResolvedType.Number] = "number", 

@@ -1,10 +1,14 @@
 ﻿<Project Sdk="Microsoft.NET.Sdk">
-    <PropertyGroup>
+    <PropertyGroup Label="General">
         <OutputType>Exe</OutputType>
         <TargetFramework>net10.0</TargetFramework>
         
         <RootNamespace>Neoluma</RootNamespace>
         <AssemblyName>neoluma</AssemblyName>
+        
+        <Product>Neoluma</Product>
+        <Version>0.1.0</Version>
+        <ReleaseType>Alpha</ReleaseType>
         
         <Nullable>enable</Nullable>
         <ImplicitUsings>enable</ImplicitUsings>
@@ -14,8 +18,12 @@
         <!-- https://learn.microsoft.com/en-us/dotnet/core/deploying/native-aot/?tabs=windows%2Cnet8#limitations-of-native-aot-deployment -->
         <IsAotCompatible>true</IsAotCompatible>
         <PublishAot>true</PublishAot>
-	<PublishSingleFile>true</PublishSingleFile>
+	    <PublishSingleFile>true</PublishSingleFile>
     	<SelfContained>true</SelfContained>
+    </PropertyGroup>
+    
+    <PropertyGroup Label="Icon Setup (Windows)" Condition="$([MSBuild]::IsOSPlatform('Windows'))">
+        <ApplicationIcon>../../resources/neoluma.ico</ApplicationIcon>
     </PropertyGroup>
 
     <ItemGroup Label="Packages">
@@ -40,5 +48,9 @@
         <EmbeddedResource Include="CLI/LicenseTemplates/Unlicense.txt" LogicalName="LicenseTemplates.Unlicense" />
 
         <EmbeddedResource Include="Localization/**/*.jsonc" />
+    </ItemGroup>
+
+    <ItemGroup Label="Extra Configs">
+        <AssemblyMetadata Include="ReleaseType" Value="$(ReleaseType)" />
     </ItemGroup>
 </Project>

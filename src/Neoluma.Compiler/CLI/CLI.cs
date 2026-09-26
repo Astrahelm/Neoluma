@@ -1,4 +1,5 @@
 ﻿using Neoluma.Core.Extras;
+using Neoluma.Libraries;
 using Neoluma.Libraries.Utils;
 
 namespace Neoluma.CLI;
@@ -6,17 +7,21 @@ namespace Neoluma.CLI;
 public static class CLI {
     /// Compiles Neoluma program into target output
     public static void build(string nlpFile) {}
+    
     /// Runs the code interpreted way. Useful for testing.
     public static void run(string nlpFile) {}
+    
     /// Checks code on errors. Doesn't generate any binaries
     public static void check(string nlpFile, bool jsonOutput = false) {}
+    
     /// Creates a project
     public static void createProject(ProjectConfig config) {}
+    
     /// Creates a project (Without ProjectConfig)
     public static void createProject() {}
-    
+
     /// Help function that just tells details about compiler and it's CLI.
-    public static void printHelp() {}
+    public static void printHelp() => Console.WriteLine(Localization.translate("CLI.helpMessage"));
 }
 
 class Licenses {
