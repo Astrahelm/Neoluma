@@ -168,17 +168,13 @@ public enum ErrorSeverity {
     Warning,
 }
 
-public struct ErrorSpan {
-    public string filePath;
-    public int len = 0;
-    public int line = 0;
-    public int column = 1;
+public readonly struct ErrorSpan {
+    public readonly SourceSpan sourceSpan;
+    public readonly int len = 0;
 
     public ErrorSpan(string filePath, string value, int line, int column) {
-        this.filePath = filePath;
+        sourceSpan = new SourceSpan(filePath, line, column);
         len = value.Length;
-        this.line = line;
-        this.column = column;
     }
 }
 
@@ -283,7 +279,7 @@ public class ErrorManager {
     
     void printSpan(ErrorSpan span, string msg, Dictionary<string, string> fileCache) {
         // Copies a new path, normalizes \\ into / in paths. yea we're fixing windows bad designs now.
-        string filePath = span.filePath.Replace('\\', '/');
+        string filePath = span.sourceSpan.filePath.Replace('\\', '/');
         if (filePath.Length == 0) return;
         
         // read a file and cache it if it's not in fileCache
@@ -295,8 +291,8 @@ public class ErrorManager {
         string source = fileCache[filePath];
         string[] lines = source.Replace("\r\n", "\n").Split('\n');
 
-        int lineNumber = Math.Max(1, span.line);
-        int columnNumber = Math.Max(1, span.column);
+        int lineNumber = Math.Max(1, span.sourceSpan.line);
+        int columnNumber = Math.Max(1, span.sourceSpan.column);
         int index = lineNumber - 1;
 
         string prevLine = index > 0 && index - 1 < lines.Length ? lines[index - 1] : "";
@@ -305,7 +301,7 @@ public class ErrorManager {
 
         int caretOffset = columnNumber - 1;
 
-        Console.WriteLine($"➡️  {span.filePath}:{lineNumber}:{columnNumber}");
+        Console.WriteLine($"➡️  {span.sourceSpan.filePath}:{lineNumber}:{columnNumber}");
         if (index > 0) Console.WriteLine($"{index,3} | {prevLine}");
         Console.WriteLine($"{lineNumber,3} | {Color.TextHex("#ff5050")}{errorLine}{Color.Reset}");
         Console.WriteLine($"{new string(' ', lineNumber + 2)}| {new string(' ', caretOffset)}{new string('^', span.len + 2)} {msg}");
@@ -366,9 +362,9 @@ public class ErrorManager {
 
             item.Add("severity", formatSeverity(error.severity));
             item.Add("error_code", formatCode(error.code));
-            item.Add("file", error.span.filePath);
-            item.Add("line", error.span.line);
-            item.Add("column", error.span.column);
+            item.Add("file", error.span.sourceSpan.filePath);
+            item.Add("line", error.span.sourceSpan.line);
+            item.Add("column", error.span.sourceSpan.column);
             item.Add("length", error.span.len);
             item.Add("message_key", error.messageKey);
             item.Add("message", Localization.translate(error.messageKey, error.messageArgs.ToArray()));

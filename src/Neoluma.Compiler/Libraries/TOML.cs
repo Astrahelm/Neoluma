@@ -1,10 +1,10 @@
 ﻿/*
- * Toml is an internal Neoluma library responsible for working with TOML format, used specifically for project files.
+ * TOML is an internal Neoluma library responsible for working with TOML format, used specifically for project files.
  */
 
 namespace Neoluma.Libraries;
 
-public static class Toml {
+public static class TOML {
     public class Property {
         public string key;
         public Value value;

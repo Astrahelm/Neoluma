@@ -1,4 +1,5 @@
-﻿using Neoluma.Core.Extras;
+﻿using System.Text;
+using Neoluma.Core.Extras;
 
 namespace Neoluma.Core.Frontend;
 
@@ -39,8 +40,8 @@ public class Lexer {
             else if (char.IsDigit(c)) lexNumber();
             else if (c == '"') lexString();
             else if (c == '/' && pos + 1 < source.Length && (source[pos+1] == '/' || source[pos+1] == '*')) skipComment();
-            else if (new string("+-*/%^=<>!&|?~").Contains(c)) lexOperator();
-            else if (new string("(){};:,.[]").Contains(c)) lexDelimeter();
+            else if ("+-*/%^=<>!&|?~".Contains(c)) lexOperator();
+            else if ("(){};:,.[]".Contains(c)) lexDelimeter();
             else if (c == '#') lexPreprocessor();
             else if (c == '@') lexDecorator();
             else {
@@ -69,9 +70,11 @@ public class Lexer {
     // Lexs
     void lexIK() { // Lex identifier or keyword
         int sl = line; int sc = column;
-        string word = "";
+        int start = pos;
 
-        while (!isAtEnd() && (char.IsLetterOrDigit(curChar()) || curChar() == '_')) word += move();
+        while (!isAtEnd() && (char.IsLetterOrDigit(curChar()) || curChar() == '_')) move();
+
+        string word = source[start..pos];
 
         if (TokenMaps.keywords.ContainsKey(word)) tokens.Add(new Token(TokenType.Keyword, word, filePath, sl, sc));
         else if (word == "null") tokens.Add(new Token(TokenType.Null, word, filePath, sl, sc));
@@ -81,14 +84,15 @@ public class Lexer {
 
     void lexNumber() {
         int sl = line; int sc = column;
-        string number = "";
+        int start = pos;
 
-        while (!isAtEnd() && char.IsDigit(curChar())) number += move();
+        while (!isAtEnd() && char.IsDigit(curChar())) move();
 
         if (!isAtEnd() && curChar() == '.') {
-            number += move();
+            move();
 
             if (isAtEnd() || !char.IsDigit(curChar())) {
+                string number = source[start..pos];
                 errorManager.addError(
                     SyntaxErrors.InvalidNumberFormat,
                     new ErrorSpan(filePath, number, sl, sc),
@@ -97,15 +101,16 @@ public class Lexer {
                 tokens.Add(new Token(TokenType.Number, number, filePath, sl, sc));
                 return;
             }
-            while (!isAtEnd() && char.IsDigit(curChar())) number += move();
+            while (!isAtEnd() && char.IsDigit(curChar())) move();
         }
 
         if (!isAtEnd() && (curChar() == 'e' || curChar() == 'E')) {
-            number += move();
+            move();
 
-            if (!isAtEnd() && (curChar() == '+' || curChar() == '-')) number += move();
+            if (!isAtEnd() && (curChar() == '+' || curChar() == '-')) move();
 
             if (isAtEnd() || !char.IsDigit(curChar())) {
+                string number = source[start..pos];
                 errorManager.addError(
                     SyntaxErrors.InvalidNumberFormat,
                     new ErrorSpan(filePath, number, sl, sc),
@@ -114,10 +119,11 @@ public class Lexer {
                 tokens.Add(new Token(TokenType.Number, number, filePath, sl, sc));
                 return;
             }
-            while (!isAtEnd() && char.IsDigit(curChar())) number += move();
+            while (!isAtEnd() && char.IsDigit(curChar())) move();
         }
-
-        tokens.Add(new Token(TokenType.Number, number, filePath, sl, sc));
+        
+        string result = source[start..pos];
+        tokens.Add(new Token(TokenType.Number, result, filePath, sl, sc));
     }
 
     void lexString() {
@@ -127,7 +133,7 @@ public class Lexer {
         */
 
         move();
-        string value = "";
+        StringBuilder value = new();
         bool esc = false; // multipurpose \n stuff checker..
         bool closedStr = false;
 
@@ -135,17 +141,17 @@ public class Lexer {
             char c = curChar();
             if (esc) {
                 switch (c) {
-                    case 'n': value += '\n'; break;
-                    case 't': value += '\t'; break;
-                    case '\\': value += '\\'; break;
-                    case '"': value += '"'; break;
+                    case 'n': value.Append('\n'); break;
+                    case 't': value.Append('\t'); break;
+                    case '\\': value.Append('\\'); break;
+                    case '"': value.Append('"'); break;
                     default:
                         errorManager.addError(
                             SyntaxErrors.UnexpectedToken,
                             new ErrorSpan(filePath, $"\\{c}", line, column),
                             "ErrorManager.Syntax.UnexpectedToken.message", new() { $"\\{c}" },
                             "ErrorManager.Syntax.UnexpectedToken.hint");
-                        value += c;
+                        value.Append(c);
                         break;
                 }
                 esc = false;
@@ -156,7 +162,7 @@ public class Lexer {
                 closedStr = true;
                 break;
             }
-            else value += c;
+            else value.Append(c);
 
             move();
         }
@@ -167,7 +173,7 @@ public class Lexer {
                 "ErrorManager.Syntax.UnterminatedString.message");
             return;
         }
-        tokens.Add(new Token(TokenType.String, value, filePath, sl, sc));
+        tokens.Add(new Token(TokenType.String, value.ToString(), filePath, sl, sc));
     }
 
     void lexOperator() {
@@ -202,9 +208,11 @@ public class Lexer {
     void lexPreprocessor() {
         int sl = line; int sc = column;
         move();
-        string word = "";
+        int start = pos;
 
-        while (!isAtEnd() && (char.IsLetter(curChar()) || curChar() == '_')) word += move();
+        while (!isAtEnd() && (char.IsLetter(curChar()) || curChar() == '_')) move();
+        
+        string word = source[start..pos];
 
         if (TokenMaps.preprocessors.ContainsKey(word)) tokens.Add(new Token(TokenType.Preprocessor, word, filePath, sl, sc));
         else {
@@ -220,9 +228,11 @@ public class Lexer {
     void lexDecorator() {
         int sl = line; int sc = column;
         move();
-        string word = "";
+        int start = pos;
 
-        while (!isAtEnd() && (char.IsLetter(curChar()) || curChar() == '_')) word += move();
+        while (!isAtEnd() && (char.IsLetter(curChar()) || curChar() == '_')) move();
+        
+        string word = source[start..pos];
 
         tokens.Add(new Token(TokenType.Decorator, word, filePath, sl, sc));
     }

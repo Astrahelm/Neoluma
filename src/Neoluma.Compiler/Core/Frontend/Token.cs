@@ -4,12 +4,12 @@ public enum TokenType {
     Keyword, Identifier, Number, Operator, String, Delimeter, Unknown, Decorator, Preprocessor, EndOfFile, Null,
 }
 
-public struct Token {
-    public TokenType type;
-    public string value;
+public readonly struct Token {
+    public readonly TokenType type;
+    public readonly string value;
     
-    public string filePath;
-    public int line, column;
+    public readonly string filePath;
+    public readonly int line, column;
 
     public Token(TokenType type, string value, string filePath, int line, int column) {
         this.type = type;
