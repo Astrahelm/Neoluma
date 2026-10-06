@@ -362,8 +362,9 @@ public sealed class DecoratorNode(
     public BlockNode body = body;
 }
 
-public sealed class NamespaceNode(ASTNode name, List<ASTNode> body) : ASTNode(ASTNodeType.Namespace) {
+public sealed class NamespaceNode(ASTNode name, string namespaceName, List<ASTNode> body) : ASTNode(ASTNodeType.Namespace) {
     public ASTNode name = name;
+    public string namespaceName = namespaceName; // for magic imports
     public List<ASTNode> body = body;
 }
 
@@ -383,7 +384,7 @@ public sealed class PreprocessorDirectiveNode(ASTPreprocessorDirectiveType direc
 
 public sealed class ModuleNode(string name, List<ASTNode>? body = null) : ASTNode(ASTNodeType.Module) {
     public string moduleName = name;
-    public List<ASTNode>? body = body ?? [];
+    public List<ASTNode> body = body ?? [];
 }
 
 // because toString() in each node is heavier than the universe dayo

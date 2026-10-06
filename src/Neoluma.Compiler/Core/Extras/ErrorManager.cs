@@ -176,6 +176,11 @@ public readonly struct ErrorSpan {
         sourceSpan = new SourceSpan(filePath, line, column);
         len = value.Length;
     }
+
+    public ErrorSpan(string value, SourceSpan sourceSpan) {
+        this.sourceSpan = sourceSpan;
+        len = value.Length;
+    }
 }
 
 // Additional context related to an error or warning.

@@ -13,4 +13,10 @@ public readonly struct SourceSpan {
         this.line = line;
         this.column = column;
     }
+
+    public SourceSpan(SourceSpan sourceSpan) {
+        filePath = sourceSpan.filePath;
+        line = sourceSpan.line;
+        column = sourceSpan.column;
+    }
 }

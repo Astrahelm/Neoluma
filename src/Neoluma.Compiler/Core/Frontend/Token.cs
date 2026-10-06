@@ -7,17 +7,21 @@ public enum TokenType {
 public readonly struct Token {
     public readonly TokenType type;
     public readonly string value;
-    
-    public readonly string filePath;
-    public readonly int line, column;
+
+    public readonly SourceSpan sourceSpan;
 
     public Token(TokenType type, string value, string filePath, int line, int column) {
         this.type = type;
         this.value = value;
-        this.filePath = filePath;
-        this.line = line;
-        this.column = column;
+        sourceSpan = new SourceSpan(filePath, line, column);
     }
+    
+    public Token(TokenType type, string value, SourceSpan sourceSpan) {
+        this.type = type;
+        this.value = value;
+        this.sourceSpan = sourceSpan;
+    }
+
 
     public string toStr() {
         string typeStr;
@@ -37,7 +41,7 @@ public readonly struct Token {
             default:                      typeStr = "<UNK>"; break;
         }
 
-        return $"[{typeStr}] -> \"{value}\", (L{line}:{column})\n";
+        return $"[{typeStr}] -> \"{value}\", (L{sourceSpan.line}:{sourceSpan.column})\n";
     }
 };
 
