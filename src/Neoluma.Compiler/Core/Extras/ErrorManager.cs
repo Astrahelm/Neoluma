@@ -356,7 +356,7 @@ public class ErrorManager {
         };
     }
 
-    JSON.Value toJson() {
+    public JSON.Value toJson() {
         JSON.Object root = new();
         root.Add("status", hasErrors() ? "error" : "ok");
 

@@ -14,7 +14,7 @@ public class Parser {
 
     // ==== Main functions ====
     public void parseModule(List<Token> tok, string moduleName) { // main parsing
-        moduleSource = null; tokens = tok; this.moduleName = moduleName; pos = 0;
+        moduleSource = null; tokens = [..tok]; this.moduleName = moduleName; pos = 0;
 
         var moduleNode = new ModuleNode(moduleName);
         moduleNode.sourceSpan = new SourceSpan(curToken().sourceSpan.filePath, 0, 0);
@@ -24,7 +24,7 @@ public class Parser {
             if (match(Delimeters.Semicolon)) { next(); continue; }
 
             ASTNode? stmt = parseStatement();
-            if (stmt != null && match(Delimeters.RightBraces)) { next(); continue; }
+            if (stmt == null && match(Delimeters.RightBraces)) { next(); continue; }
             if (stmt == null) {
                 while (!isAtEnd() && !isNextLine()) next();
 
@@ -398,14 +398,13 @@ public class Parser {
             break;
         }
 
-        if (!match(Operators.GreaterThan)) {
+        if (!consumeTypeCloseAngle()) {
             errorManager.addError(SyntaxErrors.MissingToken,
                 new ErrorSpan(curToken().value, curToken().sourceSpan),
                 "ErrorManager.Syntax.MissingToken.genericClosingAngle.message", [typeName],
                 "ErrorManager.Syntax.MissingToken.genericClosingAngle.hint");
             return null;
         }
-        next();
 
         return arguments;
     }
@@ -1882,7 +1881,7 @@ public class Parser {
                     next();
                 }
                 elements.Add(new InterfaceFieldNode(methodName, false, true, null, parameters, returnType));
-                parameters.Clear();
+                parameters = new();
                 if (isNextLine()) next();
             } else {
                 errorManager.addError(
