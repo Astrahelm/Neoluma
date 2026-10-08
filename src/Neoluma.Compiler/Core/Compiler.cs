@@ -35,11 +35,11 @@ public struct DependencyInput(string rootPath, string sourceFolder = "src") {
     public string sourceFolder = sourceFolder;
 }
 
-public struct CompilationInput(OutputType targetOutput, List<string> files, Dictionary<string, DependencyInput> dependencies, CompilerSettings settings) {
-    public OutputType targetOutput = targetOutput;
-    public List<string> files = files;
-    public Dictionary<string, DependencyInput> dependencies = dependencies;
-    public CompilerSettings settings = settings;
+public struct CompilationInput() {
+    public OutputType targetOutput = OutputType.Executable;
+    public List<string> files = new();
+    public Dictionary<string, DependencyInput> dependencies = new();
+    public CompilerSettings settings = new();
 }
 
 // Program is a class that stores results of compilation here for easy access to all information
@@ -71,9 +71,9 @@ public sealed class Compiler {
     }
     
     // Functions
-    void compile() {  // compiled way
+    public void compile() {  // compiled way
     }
-    void check(bool jsonOutput = false) {
+    public void check(bool jsonOutput = false) {
         // TODO: Tolerate sourceFolder choice
         // Parsing dependencies before getting started
         List<string> files = program.input.files;
@@ -132,7 +132,7 @@ public sealed class Compiler {
         else if (jsonOutput) Console.WriteLine($"{JSON.stringify(errorManager.toJson(), new JSON.StringifyOptions{pretty=true, emitComments=false})}");
         else Console.WriteLine($"{Color.TextHex("#75ff87")}{Localization.translate("CLI.check.complete")}{Color.Reset}");
     }
-    void run() { // interpreted way
+    public void run() { // interpreted way
     }
     
     // All parts of compiler
